@@ -8,6 +8,8 @@ dependencies = [
     "fastapi>=0.128.0",
     "numpy>=2.4.1",
     "pandas>=2.3.3",
+    "plotly>=6.5.2",
     "polars>=1.37.1",
+    "tqdm>=4.67.1",
     "uvicorn>=0.40.0",
 ]

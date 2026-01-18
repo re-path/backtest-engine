@@ -20,6 +20,7 @@ class BacktestRequest(BaseModel):
     initial_balance: float = 10000.0
     slippage: float = 0.01
     strategy_params: Dict[str, Any] = {}
+    code: Optional[str] = None
 
 class SimpleTestStrategy:
     def __init__(self, **kwargs):
@@ -60,13 +61,38 @@ def mock_data_source(start_time, end_time) -> pd.DataFrame:
 async def run_backtest_endpoint(request: BacktestRequest):
     try:
         start_dt = pd.to_datetime(request.start_date)
-        end_dt = pd.to_datetime(request.end_date)
+        end_dt = pd.to_datetime(request.end_date) # Fixed: was requesting request.end_date twice in original potentially or just logic flow
+
+        strategy_cls = SimpleTestStrategy
+        
+        # Dynamic Strategy Execution
+        if request.code:
+            try:
+                # Define a local scope for execution
+                local_scope = {}
+                # Execute the code
+                exec(request.code, globals(), local_scope)
+                
+                # Look for a class named 'Strategy' inside the executed code
+                if 'Strategy' in local_scope:
+                    strategy_cls = local_scope['Strategy']
+                else:
+                    # Fallback: try to find the first class defined
+                    import inspect
+                    classes = [obj for name, obj in local_scope.items() if inspect.isclass(obj)]
+                    if classes:
+                        strategy_cls = classes[0]
+                    else:
+                        raise ValueError("No strategy class found in the provided code. Please name your class 'Strategy'.")
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Error compiling strategy: {str(e)}")
+
         engine = BacktestEngineWithSource(
             data_source_func=mock_data_source, 
             start_time=start_dt,
             end_time=end_dt,
             interval=pd.Timedelta(days=1), 
-            strategy_cls=SimpleTestStrategy, 
+            strategy_cls=strategy_cls, 
             initial_money=request.initial_balance,
             slippage=request.slippage,
             execution_delay=0,

@@ -1,0 +1,98 @@
+/* ui/style.css */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --bg-dark: #1e1e1e;
+    /* VSCode Editor BG */
+    --bg-surface: #252526;
+    /* VSCode Sidebar/Header */
+    --accent: #007acc;
+    /* VSCode Blue */
+    --text-primary: #d4d4d4;
+    /* VSCode Text */
+    --text-secondary: #a1a1a1;
+    --border: #454545;
+    /* VSCode Border */
+    --input-bg: #3c3c3c;
+    /* Input fields */
+}
+
+body {
+    font-family: 'Roboto', sans-serif;
+    background-color: var(--bg-dark);
+    color: var(--text-primary);
+    overflow: hidden;
+}
+
+/* Material Design Utilities */
+
+.input-field {
+    width: 100%;
+    background-color: var(--input-bg);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 0.5rem 0.75rem;
+    border-radius: 2px;
+    /* VSCode is squarer */
+    font-size: 0.875rem;
+    transition: border-color 0.2s;
+}
+
+.input-field:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.label-text {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.btn-primary {
+    background-color: var(--accent);
+    transition: background-color 0.2s;
+    border-radius: 2px;
+}
+
+.btn-primary:hover {
+    background-color: #0062a3;
+}
+
+.btn-primary:active {
+    background-color: #00538b;
+}
+
+/* CodeMirror Customization */
+.CodeMirror {
+    height: 100% !important;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    background: #1e1e1e !important;
+    color: #d4d4d4 !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 10px;
+    /* VSCode style */
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-dark);
+}
+
+::-webkit-scrollbar-thumb {
+    background: #424242;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #4f4f4f;
+}

@@ -12,7 +12,7 @@ import itertools
 import plotly.express as px
 from tqdm import tqdm
 from typing import List, Dict, Any, Optional, Union, Set, Tuple, Type
-from core.engine import *
+from core.context import Context
 
 class BacktestEngineWithSource:
     def __init__(self, data_source_func, start_time, end_time, interval, strategy_cls, initial_money=100, slippage=0.20, execution_delay=0, strategy_params=None):
