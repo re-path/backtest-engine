@@ -44,10 +44,13 @@ class PriceMath:
 StockMath = PriceMath
 
 class Context:
-    def __init__(self, initial_balance: float, slippage: float, event_log: List[Dict[str, Any]], execution_delay: int = 0) -> None:
-        self.balance: float = initial_balance
+    def __init__(self, initial_balance: float, slippage: float, event_log: List[Dict[str, Any]], execution_delay: int = 0, broker_fee: float = 0.0, annual_interest_rate: float = 0.0) -> None:
+        self._balance: float = initial_balance
         self.slippage: float = slippage
-        self.positions: Dict[str, Position] = {}
+        self.broker_fee: float = broker_fee
+        self.annual_interest_rate: float = annual_interest_rate
+        
+        self._positions: Dict[str, Position] = {}
         self.event_log: List[Dict[str, Any]] = event_log
         self.state: Dict[str, Any] = {}
         self.traded_tickers: Set[str] = set()
@@ -60,6 +63,23 @@ class Context:
 
     def get_state(self, key: str, default: Any = None) -> Any:
         return self.state.get(key, default)
+
+    def set(self, key: str, value: Any) -> None:
+        """Alias for set_state"""
+        self.set_state(key, value)
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """Alias for get_state"""
+        return self.get_state(key, default)
+    
+    def get_positions(self) -> Dict[str, Position]:
+        return self._positions
+
+    def get_balance(self) -> float:
+        return self._balance
+
+    def get_position(self, ticker: str) -> Optional[Position]:
+        return self._positions.get(ticker)
 
     def buy(self, ticker: str, money_amount: float, current_price: float, current_time: Any) -> float:
         if self.execution_delay == 0:
@@ -78,21 +98,29 @@ class Context:
         return 0.0 
 
     def _execute_buy(self, ticker: str, money_amount: float, current_price: float, current_time: Any) -> float:
-        if self.balance < money_amount:
+        # Pre-calc fee to check if we have enough balance
+        fee = money_amount * self.broker_fee
+        total_cost = money_amount + fee
+        
+        if self._balance < total_cost:
             return 0.0
         
         actual_buy_price: float = current_price * (1 + self.slippage)
+        # Fee is calculated on the transaction amount (money_amount)
+        fee: float = money_amount * self.broker_fee
+        total_cost: float = money_amount + fee
+        
         share_units: float = StockMath.calculate_share_units_from_money(money_invest=money_amount, entry_price=actual_buy_price)
         
-        if share_units > 0:
-            self.balance -= money_amount
-            if ticker not in self.positions:
-                self.positions[ticker] = Position(ticker, share_units, actual_buy_price, current_time)
+        if share_units > 0 and self._balance >= total_cost:
+            self._balance -= total_cost
+            if ticker not in self._positions:
+                self._positions[ticker] = Position(ticker, share_units, actual_buy_price, current_time)
             else:
-                self.positions[ticker].share_units += share_units
+                self._positions[ticker].share_units += share_units
             
             self.traded_tickers.add(ticker)
-            self._log(current_time, "BUY", ticker, actual_buy_price, -money_amount)
+            self._log(current_time, "BUY", ticker, actual_buy_price, -total_cost)
         
         return share_units
 
@@ -115,29 +143,32 @@ class Context:
         return 0.0
 
     def _execute_sell(self, ticker: str, share_units_amount: float, current_price: float, current_time: Any, reason: str) -> float:
-        if ticker not in self.positions:
+        if ticker not in self._positions:
             return 0.0
         
-        pos: Position = self.positions[ticker]
+        pos: Position = self._positions[ticker]
         if share_units_amount > pos.share_units:
             share_units_amount = pos.share_units
             
         actual_sell_price: float = current_price * (1 - self.slippage)
         money_received: float = StockMath.calculate_money_from_share_units(share_units_to_sell=share_units_amount, exit_price=actual_sell_price)
         
-        self.balance += money_received
+        fee: float = money_received * self.broker_fee
+        net_money: float = money_received - fee
+        
+        self._balance += net_money
         pos.share_units -= share_units_amount
         
-        self._log(current_time, reason, ticker, actual_sell_price, money_received)
+        self._log(current_time, reason, ticker, actual_sell_price, net_money)
         
         if pos.share_units <= 1e-9:
-            del self.positions[ticker]
+            del self._positions[ticker]
             
-        return money_received
+        return net_money
 
     def close(self, ticker: str, current_price: float, current_time: Any, reason: str = "CLOSE") -> float:
-        if ticker in self.positions:
-            return self.sell(ticker, self.positions[ticker].share_units, current_price, current_time, reason)
+        if ticker in self._positions:
+            return self.sell(ticker, self._positions[ticker].share_units, current_price, current_time, reason)
         return 0.0
 
     def _log(self, timestamp: Any, event_type: str, ticker: str, price: float, money_change: float) -> None:
@@ -147,7 +178,7 @@ class Context:
             "ticker": ticker,
             "price": price,
             "money_change": money_change,
-            "portfolio_balance": self.balance
+            "portfolio_balance": self._balance
         })
 
     def process_pending_orders(self, current_ticker: str, current_price: float, current_time: Any) -> None:

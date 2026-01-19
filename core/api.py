@@ -5,8 +5,10 @@ import numpy as np
 import json
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
+import os
+import glob
 
 from core.engine import BacktestEngineWithSource, plot_simulation_trades
 from core.analysis import analyze_portfolio
@@ -14,11 +16,68 @@ from core.context import Context
 
 app = FastAPI()
 
+class StrategyModel(BaseModel):
+    name: str
+    code: str
+    params: Dict[str, Any]
+    date: Optional[str] = None
+
+STRATEGIES_DIR = "strategies"
+os.makedirs(STRATEGIES_DIR, exist_ok=True)
+
+@app.get("/strategies")
+async def list_strategies():
+    strategies = []
+    files = glob.glob(os.path.join(STRATEGIES_DIR, "*.json"))
+    for f in files:
+        try:
+            with open(f, 'r') as file:
+                data = json.load(file)
+                strategies.append({
+                    "name": data.get("name"),
+                    "date": data.get("date", ""),
+                })
+        except Exception:
+            continue
+    return strategies
+
+@app.get("/strategies/{name}")
+async def get_strategy(name: str):
+    file_path = os.path.join(STRATEGIES_DIR, f"{name}.json")
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Strategy not found")
+    
+    try:
+        with open(file_path, 'r') as file:
+            return json.load(file)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/strategies")
+async def save_strategy(strategy: StrategyModel):
+    file_path = os.path.join(STRATEGIES_DIR, f"{strategy.name}.json")
+    
+    # Store with current date if not provided
+    data = strategy.dict()
+    if not data.get('date'):
+        data['date'] = datetime.now().isoformat()
+        
+    try:
+        with open(file_path, 'w') as file:
+            json.dump(data, file, indent=4)
+        return {"status": "success", "message": f"Saved {strategy.name}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 class BacktestRequest(BaseModel):
     start_date: str  
     end_date: str    
     initial_balance: float = 10000.0
     slippage: float = 0.01
+    broker_fee: float = 0.0
+    annual_interest_rate: float = 0.0
     strategy_params: Dict[str, Any] = {}
     code: Optional[str] = None
 
@@ -95,6 +154,8 @@ async def run_backtest_endpoint(request: BacktestRequest):
             strategy_cls=strategy_cls, 
             initial_money=request.initial_balance,
             slippage=request.slippage,
+            broker_fee=request.broker_fee,
+            annual_interest_rate=request.annual_interest_rate,
             execution_delay=0,
             strategy_params=request.strategy_params
         )

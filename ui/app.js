@@ -22,27 +22,70 @@ const IconSave = () => (
 const IconFolder = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
 );
+const IconUpload = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+);
 
 
 // --- Defaults ---
 const DEFAULT_STRATEGY = `class Strategy:
     def __init__(self, **kwargs):
+        # Strategy parameters are passed to __init__
         self.params = kwargs
 
     def on_bar(self, context, bar):
-        # Access price and time
-        # bar.price, bar.timestamp, bar.ticker
+        """
+        Main Strategy Logic
         
-        # Simple Example: Buy randomly 10% chance
+        API Documentation:
+        ------------------
+        Accessing Data:
+          bar.price       (float) : Current close price of the asset
+          bar.timestamp   (params): Current timestamp (pandas Timestamp)
+          bar.ticker      (str)   : Ticker symbol
+          
+        Context (State & Actions):
+          context.get_balance()           : Current available cash (Affected by fees & interest)
+          context.get_positions()         : Dictionary of active positions {ticker: Position}
+          
+          # NOTE: Broker fees and Interest rates are configured in the right panel
+          # and applied automatically by the engine.
+          
+          # STATE MANAGEMENT (CRITICAL):
+          # Do NOT use self.variable = x. Use context.get/set instead.
+          context.set(key, value)         : Store a value
+          context.get(key, default=None)  : Retrieve a value, returns default if not found
+          
+          # TRADING ACTIONS:
+          context.buy(ticker, money_amount, price, time)
+          context.sell(ticker, share_fraction, price, time, reason="SELL")
+          context.close(ticker, price, time, reason="CLOSE") # Close entire position
+          
+        """
+        
+        # Example 1: Use context.get() to manage state
+        # Let's count how many bars we've seen for this ticker
+        ticker_count_key = f"{bar.ticker}_count"
+        current_count = context.get(ticker_count_key, 0)
+        context.set(ticker_count_key, current_count + 1)
+        
+        # Example 2: Accessing Parameters
+        # params are populated from the Configuration panel on the right
+        buy_probability = self.params.get('buy_prob', 0.10) 
+        
+        # Example 3: Trading Logic
         import random
-        if random.random() < 0.10:
-             if context.balance > 0:
-                 amount = context.balance * 0.20
+        if random.random() < buy_probability:
+             if context.get_balance() > 0:
+                 amount = context.get_balance() * 0.20
+                 # NOTE: context.buy handles logging and slippage automatically
                  context.buy(bar.ticker, amount, bar.price, bar.timestamp)
         
-        # Take profit example
-        if bar.ticker in context.positions:
-             pos = context.positions[bar.ticker]
+        # Example 4: Risk Management
+        positions = context.get_positions()
+        if bar.ticker in positions:
+             pos = positions[bar.ticker]
+             # Check for 5% profit
              if bar.price > pos.entry_price * 1.05:
                  context.sell(bar.ticker, pos.share_units, bar.price, bar.timestamp, "TakeProfit")
 `;
@@ -86,24 +129,49 @@ const App = () => {
     const editorRef = useRef(null);
     const cmInstance = useRef(null);
 
+    // File Input Ref
+    const fileInputRef = useRef(null);
+
+    const triggerFileSelect = () => {
+        if (fileInputRef.current) {
+            fileInputRef.current.click();
+        }
+    };
+
+    const handleFileSelect = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const content = e.target.result;
+            setCode(content);
+            if (cmInstance.current) {
+                cmInstance.current.setValue(content);
+            }
+            // Set name from filename without extension
+            const name = file.name.replace(/\.[^/.]+$/, "");
+            setStrategyName(name);
+        };
+        reader.readAsText(file);
+        // Reset value so same file can be selected again
+        event.target.value = '';
+    };
+
     const [params, setParams] = useState({
         start_date: '2025-01-01',
         end_date: '2025-12-31',
         initial_balance: 10000,
         slippage: 0.001,
+        broker_fee: 0.001,
+        annual_interest_rate: 0.0,
         strategy_params: {}
     });
 
     // Load saved strategies on mount
+    // Load saved strategies on mount
     useEffect(() => {
-        const saved = localStorage.getItem('backtest_strategies');
-        if (saved) {
-            try {
-                setSavedStrategies(JSON.parse(saved));
-            } catch (e) {
-                console.error("Failed to load strategies", e);
-            }
-        }
+        fetchStrategies();
     }, []);
 
     // Initialize CodeMirror (Only once!)
@@ -212,28 +280,60 @@ const App = () => {
         }
     };
 
-    const saveStrategy = () => {
-        const newStrategy = { name: strategyName, code, params, date: new Date().toISOString() };
-        const updated = [...savedStrategies.filter(s => s.name !== strategyName), newStrategy];
-        setSavedStrategies(updated);
-        localStorage.setItem('backtest_strategies', JSON.stringify(updated));
-        alert(`Saved strategy: ${strategyName}`);
-    };
+    const saveStrategy = async () => {
+        try {
+            const payload = { name: strategyName, code, params };
+            const response = await fetch('/strategies', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
 
-    const loadStrategy = (strat) => {
-        if (window.confirm(`Load strategy "${strat.name}"? Unsaved changes will be lost.`)) {
-            setStrategyName(strat.name);
-            setCode(strat.code);
-            setParams(strat.params);
-            if (cmInstance.current) cmInstance.current.setValue(strat.code);
+            if (!response.ok) throw new Error("Failed to save strategy");
+
+            alert(`Saved strategy: ${strategyName}`);
+            fetchStrategies(); // Refresh list
+        } catch (e) {
+            alert(e.message);
         }
     };
+
+    const fetchStrategies = async () => {
+        try {
+            const res = await fetch('/strategies');
+            if (res.ok) {
+                const data = await res.json();
+                setSavedStrategies(data);
+            }
+        } catch (e) {
+            console.error("Failed to load strategies", e);
+        }
+    };
+
+    const loadStrategy = async (stratMeta) => {
+        if (window.confirm(`Load strategy "${stratMeta.name}"? Unsaved changes will be lost.`)) {
+            try {
+                const res = await fetch(`/strategies/${stratMeta.name}`);
+                if (!res.ok) throw new Error("Failed to load strategy details");
+
+                const strat = await res.json();
+
+                setStrategyName(strat.name);
+                setCode(strat.code);
+                setParams(strat.params);
+                if (cmInstance.current) cmInstance.current.setValue(strat.code);
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+    };
+
 
     const handleChange = (e) => {
         const { name, value } = e.target;
         setParams(prev => ({
             ...prev,
-            [name]: name === 'initial_balance' || name === 'slippage' ? parseFloat(value) : value
+            [name]: ['initial_balance', 'slippage', 'broker_fee', 'annual_interest_rate'].includes(name) ? parseFloat(value) : value
         }));
     };
 
@@ -347,6 +447,14 @@ const App = () => {
                                     <label className="label-text">Slippage (%)</label>
                                     <input type="number" step="0.001" name="slippage" value={params.slippage} onChange={handleChange} className="input-field font-mono" />
                                 </div>
+                                <div>
+                                    <label className="label-text">Broker Fee (%)</label>
+                                    <input type="number" step="0.001" name="broker_fee" value={params.broker_fee || 0} onChange={handleChange} className="input-field font-mono" />
+                                </div>
+                                <div>
+                                    <label className="label-text">Interest Rate (%)</label>
+                                    <input type="number" step="0.01" name="annual_interest_rate" value={params.annual_interest_rate || 0} onChange={handleChange} className="input-field font-mono" />
+                                </div>
                             </div>
 
                             <div className="mt-6 flex space-x-2">
@@ -376,6 +484,23 @@ const App = () => {
                                     </div>
                                 </div>
                             </div>
+
+                            <div className="mt-2 text-center">
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleFileSelect}
+                                    style={{ display: 'none' }}
+                                    accept=".py"
+                                />
+                                <button
+                                    onClick={triggerFileSelect}
+                                    className="text-[#007acc] hover:underline text-xs flex items-center justify-center space-x-1 w-full"
+                                >
+                                    <IconUpload /> <span>Import .py File</span>
+                                </button>
+                            </div>
+
                         </div>
 
                         {error && (

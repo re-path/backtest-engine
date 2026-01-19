@@ -7,7 +7,7 @@ app.mount("/ui", StaticFiles(directory="ui"), name="ui")
 
 @app.get("/")
 async def root():
-    return RedirectResponse(url="/ui/zindex.html")
+    return RedirectResponse(url="/ui/index.html")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

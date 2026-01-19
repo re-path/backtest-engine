@@ -15,7 +15,7 @@ from typing import List, Dict, Any, Optional, Union, Set, Tuple, Type
 from core.context import Context
 
 class BacktestEngineWithSource:
-    def __init__(self, data_source_func, start_time, end_time, interval, strategy_cls, initial_money=100, slippage=0.20, execution_delay=0, strategy_params=None):
+    def __init__(self, data_source_func, start_time, end_time, interval, strategy_cls, initial_money=100, slippage=0.20, broker_fee=0.0, annual_interest_rate=0.0, execution_delay=0, strategy_params=None):
         self.data_source_func = data_source_func
         self.start_time = pd.to_datetime(start_time)
         self.end_time = pd.to_datetime(end_time)
@@ -27,7 +27,7 @@ class BacktestEngineWithSource:
         self.strategy = strategy_cls(**strategy_params)
         self.event_log = []
         
-        self.context = Context(initial_money, slippage, self.event_log, execution_delay=execution_delay)
+        self.context = Context(initial_money, slippage, self.event_log, execution_delay=execution_delay, broker_fee=broker_fee, annual_interest_rate=annual_interest_rate)
         self.last_known_prices = {}
 
     def run(self):
@@ -39,7 +39,7 @@ class BacktestEngineWithSource:
             "ticker": None,
             "price": None,
             "money_change": 0.0,
-            "portfolio_balance": self.context.balance
+            "portfolio_balance": self.context.get_balance()
         })
 
         current_time = self.start_time
