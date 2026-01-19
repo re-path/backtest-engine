@@ -184,3 +184,107 @@ async def run_backtest_endpoint(request: BacktestRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+from core.optimization import Optimizer, OptimizationResult
+
+class OptimizationRequest(BaseModel):
+    code: str
+    ranges: Dict[str, Dict[str, float]] # param -> {min, max, step}
+    algorithm: str # "annealing" or "hill_climb"
+    target_metric: str = "total_net_profit"
+    # Backtest params
+    start_date: str
+    end_date: str
+    initial_balance: float = 10000.0
+    slippage: float = 0.01
+    broker_fee: float = 0.0
+    annual_interest_rate: float = 0.0
+    base_params: Dict[str, Any] = {}
+
+@app.post("/optimize")
+async def run_optimization(request: OptimizationRequest):
+    try:
+        # 1. Parse dates and compile strategy once if possible
+        start_dt = pd.to_datetime(request.start_date)
+        end_dt = pd.to_datetime(request.end_date)
+        
+        # Strategy Compilation Logic (Reused)
+        strategy_cls = None
+        if request.code:
+            try:
+                local_scope = {}
+                exec(request.code, globals(), local_scope)
+                if 'Strategy' in local_scope:
+                    strategy_cls = local_scope['Strategy']
+                else:
+                    import inspect
+                    classes = [obj for name, obj in local_scope.items() if inspect.isclass(obj)]
+                    if classes:
+                        strategy_cls = classes[0]
+                    else:
+                        raise ValueError("No strategy class found")
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Error compiling strategy: {str(e)}")
+        else:
+             strategy_cls = SimpleTestStrategy
+
+        # 2. Define Objective Function
+        def objective_function(params: Dict[str, Any]) -> Dict[str, float]:
+            # Merge optimized params with base params
+            full_params = {**request.base_params, **params}
+            
+            engine = BacktestEngineWithSource(
+                data_source_func=mock_data_source, 
+                start_time=start_dt,
+                end_time=end_dt,
+                interval=pd.Timedelta(days=1), 
+                strategy_cls=strategy_cls, 
+                initial_money=request.initial_balance,
+                slippage=request.slippage,
+                broker_fee=request.broker_fee,
+                annual_interest_rate=request.annual_interest_rate,
+                execution_delay=0,
+                strategy_params=full_params
+            )
+            
+            try:
+                event_log = engine.run()
+                metrics_df = analyze_portfolio(event_log)
+                if metrics_df is not None and not metrics_df.empty:
+                    return metrics_df.to_dict(orient='records')[0]
+                return {}
+            except Exception:
+                return {}
+
+        # 3. Initialize Optimizer
+        optimizer = Optimizer(objective_function, target_metric=request.target_metric)
+        
+        # 4. Run Algorithm
+        initial_params = {}
+        for param, config in request.ranges.items():
+            # Start at midpoint
+            initial_params[param] = (config['min'] + config['max']) / 2
+            if config.get('type') == 'int':
+                initial_params[param] = int(initial_params[param])
+
+        results = []
+        if request.algorithm == "annealing":
+            results = optimizer.simulated_annealing(initial_params, request.ranges, iterations=20) # 20 iterations for responsiveness
+        elif request.algorithm == "hill_climb":
+            results = optimizer.hill_climbing(initial_params, request.ranges, iterations=20)
+        
+        return {
+            "status": "success",
+            "results": [
+                {
+                    "params": r.params,
+                    "metrics": r.metrics,
+                    "score": r.score
+                }
+                for r in results
+            ]
+        }
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
