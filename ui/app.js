@@ -363,6 +363,7 @@ const App = () => {
             cmInstance.current = CodeMirror.fromTextArea(editorRef.current, {
                 mode: 'python',
                 theme: 'dracula', // Using dracula as base, overridden by CSS
+                keyMap: 'vim',
                 lineNumbers: true,
                 matchBrackets: true,
                 autoCloseBrackets: true,

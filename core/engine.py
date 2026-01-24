@@ -14,6 +14,41 @@ from tqdm import tqdm
 from typing import List, Dict, Any, Optional, Union, Set, Tuple, Type
 from core.context import Context
 
+
+def filesystem_datasource(start_time, end_time):
+    start_date = pd.to_datetime(start_time)
+    end_date = pd.to_datetime(end_time)
+    dates = pd.date_range(start=start_date, end=end_date - pd.Timedelta(seconds=1), freq='D')
+    
+    dfs = []
+    base_path = "data/old_data"
+    
+    for date in dates:
+        year = str(date.year)
+        date_str = date.strftime('%Y-%m-%d')
+        file_path = os.path.join(base_path, year, f"{date_str}.csv")
+        
+        if os.path.exists(file_path):
+            try:
+                df = pd.read_csv(file_path, thousands=',')
+                if 'Symbol' in df.columns:
+                    df = df.rename(columns={'Symbol': 'ticker'})
+                
+                if 'Close' in df.columns:
+                    df = df.rename(columns={'Close': 'price'})
+                
+                df['timestamp'] = date
+                
+                
+                dfs.append(df)
+            except Exception as e:
+                print(f"Error reading {file_path}: {e}")
+                
+    if not dfs:
+        return pd.DataFrame(columns=['timestamp', 'ticker', 'price'])
+        
+    return pd.concat(dfs, ignore_index=True)
+
 class BacktestEngineWithSource:
     def __init__(self, data_source_func, start_time, end_time, interval, strategy_cls, initial_money=100, slippage=0.20, broker_fee=0.0, annual_interest_rate=0.0, execution_delay=0, strategy_params=None):
         self.data_source_func = data_source_func
@@ -63,9 +98,9 @@ class BacktestEngineWithSource:
         return pd.DataFrame(self.event_log)
 
 def backtest_streamed(
-        data_source_func: Any,
-        start_time: pd.Timestamp = pd.Timestamp('2025-06-01'),
-        end_time: pd.Timestamp = pd.Timestamp('2025-06-02'),
+        data_source_func: Any = filesystem_datasource,
+        start_time: pd.Timestamp = pd.Timestamp('2020-01-01'),
+        end_time: pd.Timestamp = pd.Timestamp('2020-02-01'),
         strategy: Any = None, 
         slippage: float = 0.00,
         initial_money: float = 100.0,
@@ -73,6 +108,9 @@ def backtest_streamed(
         strategy_params: Dict[str, Any] = {}
     ) -> Tuple[Any, Optional[pd.DataFrame]]:
     
+    # Local import to avoid circular dependency
+    from core.analysis import analyze_portfolio
+
     # Assuming BacktestEngineWithSource is imported or defined elsewhere
     engine: Any = BacktestEngineWithSource( 
         data_source_func=data_source_func,

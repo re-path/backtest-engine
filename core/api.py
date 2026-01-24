@@ -10,7 +10,7 @@ from datetime import datetime
 import os
 import glob
 
-from core.engine import BacktestEngineWithSource, plot_simulation_trades
+from core.engine import BacktestEngineWithSource, plot_simulation_trades, filesystem_datasource
 from core.analysis import analyze_portfolio
 from core.context import Context 
 
@@ -100,22 +100,6 @@ class SimpleTestStrategy:
         
         context.set_state('last_price', bar.price)
 
-def mock_data_source(start_time, end_time) -> pd.DataFrame:
-    dates = pd.date_range(start=start_time, end=end_time, freq='1H') 
-    if len(dates) == 0:
-        return pd.DataFrame()
-    
-    np.random.seed(42)
-    prices = 100 + np.cumsum(np.random.randn(len(dates)))
-    
-    df = pd.DataFrame({
-        'timestamp': dates,
-        'ticker': 'TEST_ASSET',
-        'price': prices,
-        'volume': np.random.randint(100, 1000, size=len(dates))
-    })
-    return df
-
 @app.post("/run-backtest")
 async def run_backtest_endpoint(request: BacktestRequest):
     try:
@@ -147,7 +131,7 @@ async def run_backtest_endpoint(request: BacktestRequest):
                 raise HTTPException(status_code=400, detail=f"Error compiling strategy: {str(e)}")
 
         engine = BacktestEngineWithSource(
-            data_source_func=mock_data_source, 
+            data_source_func=filesystem_datasource,
             start_time=start_dt,
             end_time=end_dt,
             interval=pd.Timedelta(days=1), 
@@ -233,7 +217,7 @@ async def run_optimization(request: OptimizationRequest):
             full_params = {**request.base_params, **params}
             
             engine = BacktestEngineWithSource(
-                data_source_func=mock_data_source, 
+                data_source_func=filesystem_datasource, 
                 start_time=start_dt,
                 end_time=end_dt,
                 interval=pd.Timedelta(days=1), 
