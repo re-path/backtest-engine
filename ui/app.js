@@ -31,6 +31,7 @@ const DEFAULT_STRATEGY = `class Strategy:
           
           # TRADING ACTIONS:
           context.buy(ticker, money_amount, price, time)
+          context.buy_protected(ticker, share_count, price, time) # Shares (10, 20, 30...)
           context.sell(ticker, share_fraction, price, time, reason="SELL")
           context.close(ticker, price, time, reason="CLOSE") # Close entire position
           
@@ -43,16 +44,15 @@ const DEFAULT_STRATEGY = `class Strategy:
         context.set(ticker_count_key, current_count + 1)
         
         # Example 2: Accessing Parameters
-        # params are populated from the Configuration panel on the right
         buy_probability = self.params.get('buy_prob', 0.10) 
         
-        # Example 3: Trading Logic
+        # Example 3: Trading Logic (Protected)
+        # buy_protected requires share counts in multiples of 10
         import random
         if random.random() < buy_probability:
-             if context.get_balance() > 0:
-                  amount = context.get_balance() * 0.20
-                  # NOTE: context.buy handles logging and slippage automatically
-                  context.buy(bar.ticker, amount, bar.price, bar.timestamp)
+             # Buy 10 shares if we have enough balance
+             # This automatically calculates and deducts the cash required.
+             context.buy_protected(bar.ticker, 10, bar.price, bar.timestamp)
         
         # Example 4: Risk Management
         positions = context.get_positions()

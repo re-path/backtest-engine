@@ -142,6 +142,49 @@ class Context:
         })
         return 0.0
 
+    def buy_protected(self, ticker: str, share_count: float, current_price: float, current_time: Any) -> float:
+        """
+        Enforces buying in multiples of 10, with a minimum of 10.
+        Calculates required cash automatically.
+        """
+        if share_count < 10 or share_count % 10 != 0:
+            return 0.0
+
+        if self.execution_delay == 0:
+            return self._execute_buy_shares(ticker, share_count, current_price, current_time)
+        
+        # Check if already pending for this ticker/type
+        for order in self.pending_orders:
+            if order['ticker'] == ticker and order['type'] == 'BUY_SHARES':
+                return 0.0
+
+        self.pending_orders.append({
+            'type': 'BUY_SHARES',
+            'ticker': ticker,
+            'amount': share_count,
+            'trigger_time': current_time
+        })
+        return 0.0
+
+    def _execute_buy_shares(self, ticker: str, share_count: float, current_price: float, current_time: Any) -> float:
+        actual_buy_price: float = current_price * (1 + self.slippage)
+        base_cost: float = share_count * actual_buy_price
+        fee: float = base_cost * self.broker_fee
+        total_cost: float = base_cost + fee
+        
+        if self._balance >= total_cost:
+            self._balance -= total_cost
+            if ticker not in self._positions:
+                self._positions[ticker] = Position(ticker, share_count, actual_buy_price, current_time)
+            else:
+                self._positions[ticker].share_units += share_count
+            
+            self.traded_tickers.add(ticker)
+            self._log(current_time, "BUY", ticker, actual_buy_price, -total_cost)
+            return share_count
+        
+        return 0.0
+
     def _execute_sell(self, ticker: str, share_units_amount: float, current_price: float, current_time: Any, reason: str) -> float:
         if ticker not in self._positions:
             return 0.0
@@ -193,6 +236,8 @@ class Context:
                     
                     if order['type'] == 'BUY':
                         self._execute_buy(order['ticker'], order['amount'], current_price, current_time)
+                    elif order['type'] == 'BUY_SHARES':
+                        self._execute_buy_shares(order['ticker'], order['amount'], current_price, current_time)
                     elif order['type'] == 'SELL':
                         amount: float = order['amount']
                         self._execute_sell(order['ticker'], amount, current_price, current_time, order['reason'])
