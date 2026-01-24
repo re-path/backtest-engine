@@ -1,32 +1,5 @@
 const { useState, useEffect, useRef, useCallback } = React;
 
-// --- Icons ---
-const IconPlay = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-);
-const IconCode = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
-);
-const IconSettings = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-);
-const IconChart = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
-);
-const IconList = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-);
-const IconSave = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-);
-const IconFolder = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-);
-const IconUpload = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-);
-
-
 // --- Defaults ---
 const DEFAULT_STRATEGY = `class Strategy:
     def __init__(self, **kwargs):
@@ -77,9 +50,9 @@ const DEFAULT_STRATEGY = `class Strategy:
         import random
         if random.random() < buy_probability:
              if context.get_balance() > 0:
-                 amount = context.get_balance() * 0.20
-                 # NOTE: context.buy handles logging and slippage automatically
-                 context.buy(bar.ticker, amount, bar.price, bar.timestamp)
+                  amount = context.get_balance() * 0.20
+                  # NOTE: context.buy handles logging and slippage automatically
+                  context.buy(bar.ticker, amount, bar.price, bar.timestamp)
         
         # Example 4: Risk Management
         positions = context.get_positions()
@@ -87,278 +60,8 @@ const DEFAULT_STRATEGY = `class Strategy:
              pos = positions[bar.ticker]
              # Check for 5% profit
              if bar.price > pos.entry_price * 1.05:
-                 context.sell(bar.ticker, pos.share_units, bar.price, bar.timestamp, "TakeProfit")
+                  context.sell(bar.ticker, pos.share_units, bar.price, bar.timestamp, "TakeProfit")
 `;
-
-// --- Components ---
-
-const MetricCard = ({ label, value, subValue, positive }) => (
-    <div className="bg-[#282828] p-4 rounded border border-[#504945] hover:border-[#fe8019] transition-colors">
-        <p className="text-[#a89984] text-xs font-semibold uppercase tracking-wider mb-1">{label}</p>
-        <p className={`text-2xl font-bold font-mono ${positive === true ? 'text-[#b8bb26]' : positive === false ? 'text-[#fb4934]' : 'text-[#ebdbb2]'}`}>
-            {value}
-        </p>
-        {subValue && <p className="text-xs text-[#a89984] mt-1">{subValue}</p>}
-    </div>
-);
-
-const AnalysisRow = ({ label, value, positive }) => (
-    <div className="flex justify-between items-center py-2 border-b border-[#504945] last:border-0 hover:bg-[#3c3836] px-2 rounded">
-        <span className="text-[#a89984] text-sm">{label}</span>
-        <span className={`font-mono font-medium ${positive === true ? 'text-[#b8bb26]' : positive === false ? 'text-[#fb4934]' : 'text-[#d5c4a1]'}`}>
-            {value}
-        </span>
-    </div>
-);
-
-const TradesTable = ({ events }) => {
-    const [searchTerm, setSearchTerm] = useState('');
-
-    const filteredEvents = events.filter(ev => {
-        const searchLower = searchTerm.toLowerCase();
-        return (
-            (ev.ticker && ev.ticker.toLowerCase().includes(searchLower)) ||
-            (ev.event_type && ev.event_type.toLowerCase().includes(searchLower))
-        );
-    });
-
-    return (
-        <div className="flex flex-col h-full overflow-hidden">
-            <div className="p-2 border-b border-[#504945] bg-[#1d2021] flex items-center gap-2">
-                <IconSettings /> {/* Reusing an icon for the search bar prefix or just a search icon if I had one */}
-                <input
-                    type="text"
-                    placeholder="Search by Ticker or Event Type..."
-                    className="bg-[#282828] border border-[#504945] text-[#ebdbb2] text-xs p-1.5 rounded w-64 outline-none focus:border-[#fe8019] transition-colors"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                <span className="text-[10px] text-[#a89984] font-mono uppercase">
-                    Showing {filteredEvents.length} of {events.length} events
-                </span>
-            </div>
-            <div className="overflow-auto flex-grow">
-                <table className="w-full text-left border-collapse font-mono text-xs">
-                    <thead className="sticky top-0 bg-[#282828] text-[#a89984] uppercase font-bold z-10">
-                        <tr>
-                            <th className="p-2 border-b border-[#504945]">Time</th>
-                            <th className="p-2 border-b border-[#504945]">Event</th>
-                            <th className="p-2 border-b border-[#504945]">Ticker</th>
-                            <th className="p-2 border-b border-[#504945]">Price</th>
-                            <th className="p-2 border-b border-[#504945]">Change</th>
-                            <th className="p-2 border-b border-[#504945]">Balance</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredEvents.map((ev, i) => (
-                            <tr key={i} className="border-b border-[#3c3836] hover:bg-[#282828] transition-colors">
-                                <td className="p-2 text-[#ebdbb2] whitespace-nowrap">{ev.timestamp.split('.')[0]}</td>
-                                <td className="p-2">
-                                    <span className={`px-1.5 py-0.5 rounded-sm font-bold ${ev.event_type === 'BUY' ? 'bg-[#b8bb26] text-[#282828]' :
-                                        ev.event_type.startsWith('SELL') ? 'bg-[#fb4934] text-[#282828]' :
-                                            'bg-[#3c3836] text-[#a89984]'
-                                        }`}>
-                                        {ev.event_type}
-                                    </span>
-                                </td>
-                                <td className="p-2 text-[#83a598]">{ev.ticker || '-'}</td>
-                                <td className="p-2 text-[#fabd2f]">{ev.price ? parseFloat(ev.price).toFixed(2) : '-'}</td>
-                                <td className={`p-2 ${parseFloat(ev.money_change) > 0 ? 'text-[#b8bb26]' : parseFloat(ev.money_change) < 0 ? 'text-[#fb4934]' : 'text-[#a89984]'}`}>
-                                    {ev.money_change !== '0.0' ? parseFloat(ev.money_change).toFixed(2) : '-'}
-                                </td>
-                                <td className="p-2 text-[#ebdbb2] font-bold">{parseFloat(ev.portfolio_balance).toFixed(2)}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-};
-
-
-const OptimizationPanel = ({ params, onRun, loading, results, onApplyParams }) => {
-    const [config, setConfig] = useState({
-        ranges: {}, // param -> {min, max, step, type}
-        algorithm: 'annealing',
-        target_metric: 'total_net_profit'
-    });
-
-    // Helper to add a parameter to optimization
-    const addParam = (key, value) => {
-        if (config.ranges[key]) return;
-        const isInt = Number.isInteger(value);
-        setConfig(prev => ({
-            ...prev,
-            ranges: {
-                ...prev.ranges,
-                [key]: {
-                    min: isInt ? value - 5 : value * 0.5,
-                    max: isInt ? value + 5 : value * 1.5,
-                    step: isInt ? 1 : value * 0.1,
-                    type: isInt ? 'int' : 'float'
-                }
-            }
-        }));
-    };
-
-    const removeParam = (key) => {
-        const newRanges = { ...config.ranges };
-        delete newRanges[key];
-        setConfig(prev => ({ ...prev, ranges: newRanges }));
-    };
-
-    const updateRange = (key, field, val) => {
-        setConfig(prev => ({
-            ...prev,
-            ranges: {
-                ...prev.ranges,
-                [key]: { ...prev.ranges[key], [field]: parseFloat(val) }
-            }
-        }));
-    };
-
-    return (
-        <div className="flex flex-col h-full bg-[#1d2021] overflow-hidden">
-
-            {/* Config Section */}
-            <div className="flex-shrink-0 bg-[#282828] border-b border-[#504945] p-6">
-                <div className="flex justify-between items-start mb-6">
-                    <div>
-                        <h2 className="text-lg font-bold text-[#ebdbb2] flex items-center gap-2">
-                            <IconSettings /> Optimization Configuration
-                        </h2>
-                        <p className="text-xs text-[#a89984] mt-1">Select parameters to optimize and define their ranges.</p>
-                    </div>
-                    <div className="flex gap-4">
-                        <select
-                            className="bg-[#3c3836] border border-[#504945] text-[#ebdbb2] text-xs p-2 rounded outline-none focus:border-[#fe8019]"
-                            value={config.algorithm}
-                            onChange={e => setConfig({ ...config, algorithm: e.target.value })}
-                        >
-                            <option value="annealing">Simulated Annealing</option>
-                            <option value="hill_climb">Hill Climbing</option>
-                        </select>
-                        <select
-                            className="bg-[#3c3836] border border-[#504945] text-[#ebdbb2] text-xs p-2 rounded outline-none focus:border-[#fe8019]"
-                            value={config.target_metric}
-                            onChange={e => setConfig({ ...config, target_metric: e.target.value })}
-                        >
-                            <option value="total_net_profit">Max Net Profit</option>
-                            <option value="sharpe_ratio">Max Sharpe Ratio</option>
-                            <option value="max_drawdown_pct">Min Drawdown (Not Impl)</option>
-                        </select>
-                        <button
-                            onClick={() => onRun(config)}
-                            disabled={loading || Object.keys(config.ranges).length === 0}
-                            className={`bg-[#fe8019] hover:bg-[#fabd2f] text-[#282828] px-4 py-2 rounded font-bold text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
-                        >
-                            {loading ? 'OPTIMIZING...' : 'START OPTIMIZATION'}
-                        </button>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {/* Available Params */}
-                    <div className="bg-[#1d2021] border border-[#504945] rounded p-4">
-                        <h3 className="text-xs font-bold text-[#a89984] uppercase mb-3">Available Parameters</h3>
-                        <div className="flex flex-wrap gap-2">
-                            {Object.entries(params.strategy_params).map(([k, v]) => (
-                                <button
-                                    key={k}
-                                    onClick={() => addParam(k, v)}
-                                    disabled={!!config.ranges[k]}
-                                    className={`px-2 py-1 text-xs rounded border border-[#504945] transition-colors ${config.ranges[k] ? 'opacity-50 cursor-not-allowed bg-[#3c3836]' : 'hover:border-[#fe8019] hover:text-[#fe8019] bg-[#282828]'}`}
-                                >
-                                    {k}
-                                </button>
-                            ))}
-                            {Object.keys(params.strategy_params).length === 0 && <span className="text-xs text-[#504945] italic">No strategy params defined.</span>}
-                        </div>
-                    </div>
-
-                    {/* Active Ranges */}
-                    <div className="bg-[#1d2021] border border-[#504945] rounded p-4 md:col-span-2 overflow-y-auto max-h-48">
-                        <h3 className="text-xs font-bold text-[#a89984] uppercase mb-3">Optimization Ranges</h3>
-                        <div className="space-y-2">
-                            {Object.entries(config.ranges).map(([k, range]) => (
-                                <div key={k} className="flex items-center gap-4 bg-[#282828] p-2 rounded border border-[#3c3836]">
-                                    <span className="text-xs font-mono font-bold text-[#fe8019] w-24 truncate" title={k}>{k}</span>
-                                    <div className="flex items-center gap-2 flex-1">
-                                        <div className="flex flex-col">
-                                            <label className="text-[10px] text-[#a89984]">MIN</label>
-                                            <input type="number" className="bg-[#3c3836] text-[#ebdbb2] text-xs p-1 rounded w-20 border border-transparent focus:border-[#fe8019] outline-none"
-                                                value={range.min} onChange={(e) => updateRange(k, 'min', e.target.value)} />
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <label className="text-[10px] text-[#a89984]">MAX</label>
-                                            <input type="number" className="bg-[#3c3836] text-[#ebdbb2] text-xs p-1 rounded w-20 border border-transparent focus:border-[#fe8019] outline-none"
-                                                value={range.max} onChange={(e) => updateRange(k, 'max', e.target.value)} />
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <label className="text-[10px] text-[#a89984]">STEP</label>
-                                            <input type="number" className="bg-[#3c3836] text-[#ebdbb2] text-xs p-1 rounded w-20 border border-transparent focus:border-[#fe8019] outline-none"
-                                                value={range.step} onChange={(e) => updateRange(k, 'step', e.target.value)} />
-                                        </div>
-                                    </div>
-                                    <button onClick={() => removeParam(k)} className="text-[#fb4934] hover:bg-[#3c3836] p-1 rounded">✕</button>
-                                </div>
-                            ))}
-                            {Object.keys(config.ranges).length === 0 && <p className="text-xs text-[#504945] italic">Add parameters from the left to configure ranges.</p>}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Results Table */}
-            <div className="flex-grow overflow-auto bg-[#1d2021] p-6 relative">
-                <h3 className="text-xs font-bold text-[#a89984] uppercase mb-3 sticky top-0 bg-[#1d2021] py-2">Optimization Results ({results ? results.length : 0} runs)</h3>
-
-                {!results && <div className="text-center mt-20 text-[#504945]">Run optimization to see results here.</div>}
-
-                {results && (
-                    <table className="w-full text-left border-collapse">
-                        <thead className="sticky top-8 bg-[#282828] text-[#a89984] text-xs uppercase font-bold z-10">
-                            <tr>
-                                <th className="p-3 border-b border-[#504945]">Score</th>
-                                <th className="p-3 border-b border-[#504945]">Net Profit</th>
-                                <th className="p-3 border-b border-[#504945]">Returns</th>
-                                <th className="p-3 border-b border-[#504945]">Sharpe</th>
-                                <th className="p-3 border-b border-[#504945]">Drawdown</th>
-                                <th className="p-3 border-b border-[#504945]">Parameters</th>
-                                <th className="p-3 border-b border-[#504945]">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody className="text-sm font-mono">
-                            {results.sort((a, b) => b.score - a.score).map((res, i) => (
-                                <tr key={i} className="border-b border-[#3c3836] hover:bg-[#282828] transition-colors">
-                                    <td className="p-3 text-[#fe8019] font-bold">{res.score.toFixed(4)}</td>
-                                    <td className={`p-3 ${res.metrics.total_net_profit >= 0 ? 'text-[#b8bb26]' : 'text-[#fb4934]'}`}>
-                                        {res.metrics.total_net_profit?.toFixed(2)}
-                                    </td>
-                                    <td className="p-3">{res.metrics.total_return_pct?.toFixed(2)}%</td>
-                                    <td className="p-3">{res.metrics.sharpe_ratio?.toFixed(2)}</td>
-                                    <td className="p-3 text-[#fb4934]">{res.metrics.max_drawdown_pct?.toFixed(2)}%</td>
-                                    <td className="p-3 text-[#ebdbb2] text-xs">
-                                        {JSON.stringify(res.params).replace(/["{}]/g, '').replace(/,/g, ', ')}
-                                    </td>
-                                    <td className="p-3">
-                                        <button
-                                            onClick={() => onApplyParams(res.params)}
-                                            className="text-[#83a598] hover:text-[#ebdbb2] hover:underline text-xs"
-                                        >
-                                            Apply
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
-        </div>
-    );
-};
 
 const App = () => {
     const [activeTab, setActiveTab] = useState('strategies'); // strategies, results, analysis
@@ -448,32 +151,23 @@ const App = () => {
         }
     }, []);
 
-    // Resize Chart on Tab Switch
+    // Chart Rendering Effect
     useEffect(() => {
-        if (activeTab === 'results' && resultsSubTab === 'chart' && results?.plot_json) {
+        if (activeTab === 'results' && resultsSubTab === 'chart' && results?.plot_html) {
             setTimeout(() => {
                 const container = document.getElementById('chart-container-full');
                 if (container) {
-                    const responsiveLayout = {
-                        ...results.plot_json.layout,
-                        width: undefined, // Override fixed values
-                        height: undefined,
-                        autosize: true,
-                        margin: { t: 40, b: 40, l: 60, r: 60 } // Optional: ensure good margins
-                    };
+                    // Clear previous content
+                    container.innerHTML = '';
 
-                    Plotly.react('chart-container-full', results.plot_json.data, responsiveLayout, {
-                        responsive: true,
-                        paper_bgcolor: '#1d2021',
-                        plot_bgcolor: '#1d2021',
-                        font: { color: '#ebdbb2' },
-                        xaxis: { gridcolor: '#504945' },
-                        yaxis: { gridcolor: '#504945' }
-                    });
+                    // Render HTML fragment and execute embedded scripts
+                    const range = document.createRange();
+                    const fragment = range.createContextualFragment(results.plot_html);
+                    container.appendChild(fragment);
                 }
             }, 50);
         }
-        // Force refresh codemirror when strategy tab becomes active to prevent visual glitches
+        // Force refresh codemirror when strategy tab becomes active
         if (activeTab === 'strategies' && cmInstance.current) {
             setTimeout(() => cmInstance.current.refresh(), 50);
         }
@@ -884,9 +578,9 @@ const App = () => {
                                         {results.metrics.total_trades} TRADES
                                     </div>
                                 </div>
-                                <div className="flex-grow p-0 overflow-hidden">
+                                <div className="flex-grow p-0 overflow-auto">
                                     {resultsSubTab === 'chart' ? (
-                                        <div id="chart-container-full" className="w-full h-full bg-[#1d2021]"></div>
+                                        <div id="chart-container-full" className="bg-[#1d2021]"></div>
                                     ) : (
                                         <TradesTable events={results.event_log} />
                                     )}

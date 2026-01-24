@@ -13,8 +13,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- Plotly.js -->
-    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
 
     <!-- CodeMirror -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css" rel="stylesheet">
@@ -27,13 +26,21 @@
 
     <!-- Custom Styles -->
     <link rel="stylesheet" href="/ui/style.css">
-    <link rel="icon" type="image/x-icon" href="/ui/favicon.ico">
+    <link rel="icon" type="image/x-icon" href="/ui/res/favicon.ico">
 </head>
 
 <body class="bg-[#0f172a] text-slate-200">
     <div id="root"></div>
 
     <!-- Scripts -->
+    <!-- Components -->
+    <script src="/ui/components/Icons.js" type="text/babel"></script>
+    <script src="/ui/components/MetricCard.js" type="text/babel"></script>
+    <script src="/ui/components/AnalysisRow.js" type="text/babel"></script>
+    <script src="/ui/components/TradesTable.js" type="text/babel"></script>
+    <script src="/ui/components/OptimizationPanel.js" type="text/babel"></script>
+
+    <!-- Main App -->
     <script src="/ui/app.js" type="text/babel"></script>
 </body>
 

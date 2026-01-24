@@ -151,7 +151,7 @@ async def run_backtest_endpoint(request: BacktestRequest):
         metrics_df = analyze_portfolio(event_log_df)
         
         fig = plot_simulation_trades(event_log_df)
-        plot_json = fig.to_json()
+        plot_html = fig.to_html(full_html=False, include_plotlyjs=True)
 
         metrics_dict = metrics_df.to_dict(orient='records')[0] if metrics_df is not None else {}
         
@@ -160,7 +160,7 @@ async def run_backtest_endpoint(request: BacktestRequest):
         return {
             "status": "success",
             "metrics": metrics_dict,
-            "plot_json": json.loads(plot_json), 
+            "plot_html": plot_html, 
             "event_log": event_log_dict
         }
 
