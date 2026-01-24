@@ -48,7 +48,17 @@ const TradesTable = ({ events }) => {
                                         {ev.event_type}
                                     </span>
                                 </td>
-                                <td className="p-2 text-[#83a598]">{ev.ticker || '-'}</td>
+                                <td className="p-2 text-[#83a598]">
+                                    {ev.ticker ? (
+                                        <a
+                                            href={`/ui/ticker-chart.html?ticker=${ev.ticker}`}
+                                            target="_blank"
+                                            className="hover:text-[#fe8019] border-b border-transparent hover:border-[#fe8019] transition-all cursor-pointer no-underline"
+                                        >
+                                            {ev.ticker}
+                                        </a>
+                                    ) : '-'}
+                                </td>
                                 <td className="p-2 text-[#fabd2f]">{ev.price ? parseFloat(ev.price).toFixed(2) : '-'}</td>
                                 <td className={`p-2 ${parseFloat(ev.money_change) > 0 ? 'text-[#b8bb26]' : parseFloat(ev.money_change) < 0 ? 'text-[#fb4934]' : 'text-[#a89984]'}`}>
                                     {ev.money_change !== '0.0' ? parseFloat(ev.money_change).toFixed(2) : '-'}

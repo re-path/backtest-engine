@@ -60,7 +60,7 @@ const DEFAULT_STRATEGY = `class Strategy:
              pos = positions[bar.ticker]
              # Check for 5% profit
              if bar.price > pos.entry_price * 1.05:
-                  context.sell(bar.ticker, pos.share_units, bar.price, bar.timestamp, "TakeProfit")
+                  context.sell(bar.ticker, pos.share_units, bar.price, bar.timestamp, "SELL")
 `;
 
 const App = () => {

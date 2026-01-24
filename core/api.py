@@ -16,6 +16,11 @@ from core.context import Context
 
 app = FastAPI()
 
+# Global storage for the last backtest run
+last_backtest_results = {
+    "event_log": None
+}
+
 class StrategyModel(BaseModel):
     name: str
     code: str
@@ -148,6 +153,9 @@ async def run_backtest_endpoint(request: BacktestRequest):
         event_log_df = engine.run()
         print(f">>> Engine finished. Log size: {len(event_log_df)} rows")
 
+        # Save for later retrieval by detail tabs
+        last_backtest_results["event_log"] = event_log_df
+
         metrics_df = analyze_portfolio(event_log_df)
         
         fig = plot_simulation_trades(event_log_df)
@@ -272,3 +280,58 @@ async def run_optimization(request: OptimizationRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+@app.get("/backtest/last-log")
+async def get_last_log():
+    df = last_backtest_results.get("event_log")
+    if df is None:
+        return {"event_log": []}
+    return {"event_log": df.astype(str).to_dict(orient='records')}
+
+@app.get("/ticker/{ticker}/ohlc")
+async def get_ticker_ohlc(ticker: str):
+    """
+    Fetch OHLC data for a specific ticker across all available dates in data/old_data.
+    """
+    base_path = "data/old_data"
+    all_data = []
+    
+    # We'll reuse the logic from filesystem_datasource but filtered for one ticker
+    # and extracting OHLC columns.
+    years = sorted([d for d in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, d))])
+    
+    for year in years:
+        year_path = os.path.join(base_path, year)
+        files = sorted(glob.glob(os.path.join(year_path, "*.csv")))
+        
+        for file_path in files:
+            try:
+                # Optimized read: only read required columns if possible
+                df = pd.read_csv(file_path, thousands=',')
+                
+                # Normalize Symbol column
+                symbol_col = 'Symbol' if 'Symbol' in df.columns else ('ticker' if 'ticker' in df.columns else None)
+                if not symbol_col: continue
+                
+                ticker_df = df[df[symbol_col] == ticker]
+                if ticker_df.empty: continue
+                
+                # Extract date from filename
+                date_str = os.path.basename(file_path).replace(".csv", "")
+                timestamp = int(pd.to_datetime(date_str).timestamp())
+                
+                # Standardize column names for TradingView JS
+                # TradingView expects: time, open, high, low, close
+                row = ticker_df.iloc[0]
+                all_data.append({
+                    "time": timestamp,
+                    "open": float(str(row.get('Open', row.get('price', 0))).replace(',', '')),
+                    "high": float(str(row.get('High', row.get('price', 0))).replace(',', '')),
+                    "low": float(str(row.get('Low', row.get('price', 0))).replace(',', '')),
+                    "close": float(str(row.get('Close', row.get('price', 0))).replace(',', ''))
+                })
+            except Exception as e:
+                print(f"Error processing {file_path} for OHLC: {e}")
+
+    # Sort by time
+    all_data.sort(key=lambda x: x["time"])
+    return all_data

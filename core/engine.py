@@ -228,5 +228,4 @@ def plot_simulation_trades(event_log_df):
         yaxis2=dict(title="Portfolio Balance", side="right", showgrid=False)
     )
 
-    fig.show()
     return fig

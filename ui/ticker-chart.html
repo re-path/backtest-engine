@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticker Performance - Backtest Viewer</title>
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1d2021;
+            color: #ebdbb2;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #header {
+            padding: 1rem;
+            background: #282828;
+            border-bottom: 1px solid #504945;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #chart-container {
+            flex-grow: 1;
+            width: 100%;
+        }
+
+        .ticker-name {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #fe8019;
+        }
+
+        .stats {
+            font-size: 0.8rem;
+            color: #a89984;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2rem;
+            color: #fabd2f;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="header">
+        <div>
+            <span class="ticker-name" id="ticker-display">---</span>
+            <span class="stats" style="margin-left: 1rem;">Daily Candlestick Chart</span>
+        </div>
+        <div id="activity-stats" class="stats">
+            Fetching Activity...
+        </div>
+    </div>
+
+    <div id="loading">Initialing Chart Data...</div>
+    <div id="chart-container"></div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const ticker = urlParams.get('ticker');
+
+        if (!ticker) {
+            document.body.innerHTML = "<h1>No Ticker Specified</h1>";
+        } else {
+            document.getElementById('ticker-display').innerText = ticker;
+            initChart();
+        }
+
+        async function initChart() {
+            try {
+                const container = document.getElementById('chart-container');
+                const loading = document.getElementById('loading');
+
+                // 1. Fetch OHLC and Trade Logs concurrently
+                const [ohlcResponse, logResponse] = await Promise.all([
+                    fetch(`/ticker/${ticker}/ohlc`),
+                    fetch(`/backtest/last-log`)
+                ]);
+
+                const ohlcData = await ohlcResponse.json();
+                const logData = await logResponse.json();
+
+                if (ohlcData.length === 0) {
+                    loading.innerText = "No historical data found for this ticker.";
+                    return;
+                }
+
+                loading.style.display = 'none';
+
+                // 2. Create Chart instance
+                const chart = LightweightCharts.createChart(container, {
+                    layout: {
+                        background: { color: '#1d2021' },
+                        textColor: '#a89984',
+                    },
+                    grid: {
+                        vertLines: { color: 'rgba(80, 73, 69, 0.2)' },
+                        horzLines: { color: 'rgba(80, 73, 69, 0.2)' },
+                    },
+                    crosshair: {
+                        mode: LightweightCharts.CrosshairMode.Normal,
+                    },
+                    timeScale: {
+                        borderColor: '#504945',
+                        timeVisible: true,
+                    },
+                });
+
+                const candlestickSeries = chart.addCandlestickSeries({
+                    upColor: '#b8bb26',
+                    downColor: '#fb4934',
+                    borderVisible: false,
+                    wickUpColor: '#b8bb26',
+                    wickDownColor: '#fb4934',
+                });
+
+                candlestickSeries.setData(ohlcData);
+
+                // 3. Process Trade Markers
+                const tickerLogs = logData.event_log.filter(l => l.ticker === ticker);
+                const markers = tickerLogs.map(log => {
+                    const type = log.event_type;
+                    const isBuy = type === 'BUY';
+                    const isSell = type.startsWith('SELL');
+
+                    if (!isBuy && !isSell) return null;
+
+                    return {
+                        time: Math.floor(new Date(log.timestamp).getTime() / 1000),
+                        position: isBuy ? 'belowBar' : 'aboveBar',
+                        color: isBuy ? '#b8bb26' : '#fb4934',
+                        shape: isBuy ? 'arrowUp' : 'arrowDown',
+                        text: `${type} @ ${parseFloat(log.price).toFixed(2)}`,
+                        size: 2
+                    };
+                }).filter(m => m !== null);
+
+                candlestickSeries.setMarkers(markers);
+
+                document.getElementById('activity-stats').innerText = `${tickerLogs.length} Activities Found`;
+
+                // Handle Resizing
+                window.addEventListener('resize', () => {
+                    chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
+                });
+
+                chart.timeScale().fitContent();
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById('loading').innerText = "Failed to load chart data.";
+            }
+        }
+    </script>
+</body>
+
+</html>
