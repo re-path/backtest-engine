@@ -132,76 +132,103 @@ def backtest_streamed(
     
     return event_log, analysis_results
 
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
+
 def plot_simulation_trades(event_log_df):
     if event_log_df.empty:
         return go.Figure()
 
     df = event_log_df.copy()
+    
+    # 1. Standardize Timestamps
     if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
-        try:
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
-        except:
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', errors='coerce')
+        if df['timestamp'].isna().all():
+            df['timestamp'] = pd.to_datetime(event_log_df['timestamp'], errors='coerce')
 
-    df = df[df['ticker'].notna()]
+    # 2. Hard Numeric Conversion
+    df['price'] = pd.to_numeric(df['price'], errors='coerce')
+    df['portfolio_balance'] = pd.to_numeric(df['portfolio_balance'], errors='coerce')
+    
+    # 3. THE FIX: Kill the zero-price garbage that creates the bottom-trails
+    # This ensures the trail only exists where the dots exist
+    df = df.dropna(subset=['ticker', 'price', 'timestamp'])
+    df = df[df['price'] > 1e-8] # Filters out actual 0.0 values
+    
     df = df.sort_values(by=['ticker', 'timestamp'])
-
-    entries = df[df['event_type'] == 'BUY']
-    partials = df[df['event_type'].isin(['SELL', 'SELL-MOON'])]
-    exits = df[df['event_type'].isin(['STOP', 'TIME_EXIT', 'LIQUIDATE', 'CLOSE'])]
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-    line_x = []
-    line_y = []
-    for ticker, group in df.groupby("ticker"):
-        line_x.extend(group["timestamp"])
-        line_y.extend(group["price"])
-        line_x.append(None)
-        line_y.append(None)
+    # 4. Generate Dynamic Color Map for Dots
+    unique_events = df['event_type'].unique()
+    palette = px.colors.qualitative.Alphabet + px.colors.qualitative.Dark24
+    color_map = {}
+    for i, event in enumerate(unique_events):
+        evt_str = str(event).lower()
+        if 'buy' in evt_str:
+            color_map[event] = '#00FF00' # Bright Green
+        elif 'sell' in evt_str or 'take' in evt_str:
+            color_map[event] = '#00BFFF' # Blue
+        elif any(x in evt_str for x in ['stop', 'liquidate', 'exit', 'close', 'loss']):
+            color_map[event] = '#FF3333' # Red
+        else:
+            color_map[event] = palette[i % len(palette)]
 
+    # 5. Trails: Connected PER TICKER using the cleaned price
+    for ticker in df['ticker'].unique():
+        ticker_data = df[df['ticker'] == ticker]
+        fig.add_trace(go.Scatter(
+            x=ticker_data['timestamp'],
+            y=ticker_data['price'],
+            mode='lines',
+            name=f'Trail: {ticker}',
+            line=dict(color='rgba(200, 200, 200, 0.3)', width=1, dash='dot'),
+            showlegend=False,
+            hoverinfo='skip',
+            connectgaps=False
+        ), secondary_y=False)
+
+    # 6. Dots: Each event type gets its own color
+    for event_type in unique_events:
+        event_data = df[df['event_type'] == event_type]
+        fig.add_trace(go.Scatter(
+            x=event_data['timestamp'],
+            y=event_data['price'],
+            mode='markers',
+            name=str(event_type),
+            customdata=event_data[['ticker', 'money_change']],
+            marker=dict(
+                color=color_map[event_type], 
+                size=8, 
+                line=dict(width=0.5, color='white'),
+                opacity=0.8
+            ),
+            hovertemplate="<b>" + str(event_type) + "</b><br>Tkr: %{customdata[0]}<br>Px: %{y}<br>Chg: %{customdata[1]}<extra></extra>"
+        ), secondary_y=False)
+
+    # 7. Portfolio Balance (Area chart on right axis)
+    balance_df = df.sort_values('timestamp').drop_duplicates('timestamp', keep='last')
     fig.add_trace(go.Scatter(
-        x=line_x, y=line_y, mode="lines", name="Trade Path",
-        line=dict(color="grey", width=1, dash="dot"), hoverinfo="none"
-    ), secondary_y=False)
-
-    fig.add_trace(go.Scatter(
-        x=entries["timestamp"], y=entries["price"], mode="markers", name="Entry",
-        customdata=entries[["ticker", "money_change"]],
-        marker=dict(color="#00ff00", size=8, symbol="circle", line=dict(width=1, color="white")),
-        hovertemplate="<b>ENTRY</b><br>ticker: %{customdata[0]}<br>Cost: %{customdata[1]:.2f} RS<br>Time: %{x}<br>price: %{y:,.0f}<extra></extra>"
-    ), secondary_y=False)
-
-    fig.add_trace(go.Scatter(
-        x=partials["timestamp"], y=partials["price"], mode="markers", name="Partial Profit",
-        customdata=partials[["ticker", "event_type", "money_change"]],
-        marker=dict(color="#00bfff", size=7, symbol="diamond"),
-        hovertemplate="<b>PARTIAL</b><br>ticker: %{customdata[0]}<br>Type: %{customdata[1]}<br>Return: +%{customdata[2]:.2f} RS<br>Time: %{x}<br>price: %{y:,.0f}<extra></extra>"
-    ), secondary_y=False)
-
-    fig.add_trace(go.Scatter(
-        x=exits["timestamp"], y=exits["price"], mode="markers", name="Closed",
-        customdata=exits[["ticker", "event_type", "money_change"]],
-        marker=dict(color="#ff3333", size=8, symbol="x", line=dict(width=2)),
-        hovertemplate="<b>CLOSED</b><br>ticker: %{customdata[0]}<br>Reason: %{customdata[1]}<br>Return: +%{customdata[2]:.2f} RS<br>Time: %{x}<br>price: %{y:,.0f}<extra></extra>"
-    ), secondary_y=False)
-
-    balance_df = df.sort_values(by='timestamp')
-
-    fig.add_trace(go.Scatter(
-        x=balance_df['timestamp'], 
+        x=balance_df['timestamp'],
         y=balance_df['portfolio_balance'],
         mode='lines',
         name='Portfolio Balance',
-        line=dict(color='rgba(0, 255, 0, 0.5)', width=1), # Thin green line
-        fill='tozeroy',                                   # Fills area to bottom
-        fillcolor='rgba(0, 255, 0, 0.1)',                 # Very transparent green background
-    ), secondary_y=True)                                  # <--- Puts it on Right Y-Axis
+        line=dict(color='rgba(255, 255, 255, 0.4)', width=1.5),
+        fill='tozeroy',
+        fillcolor='rgba(100, 100, 100, 0.1)'
+    ), secondary_y=True)
 
     fig.update_layout(
-        title="Portfolio Simulation",
         template="plotly_dark",
-         height=700, width=1500,
-        yaxis2=dict(title="Portfolio Balance (RS)", showgrid=False)
+        height=800,
+        width=1600,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+        xaxis=dict(showgrid=False),
+        yaxis=dict(title="Execution Price", side="left", showgrid=True, gridcolor='rgba(255,255,255,0.05)'),
+        yaxis2=dict(title="Portfolio Balance", side="right", showgrid=False)
     )
+
     return fig
