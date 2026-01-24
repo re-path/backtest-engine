@@ -111,6 +111,45 @@ const AnalysisRow = ({ label, value, positive }) => (
     </div>
 );
 
+const TradesTable = ({ events }) => (
+    <div className="overflow-auto h-full">
+        <table className="w-full text-left border-collapse font-mono text-xs">
+            <thead className="sticky top-0 bg-[#282828] text-[#a89984] uppercase font-bold z-10">
+                <tr>
+                    <th className="p-2 border-b border-[#504945]">Time</th>
+                    <th className="p-2 border-b border-[#504945]">Event</th>
+                    <th className="p-2 border-b border-[#504945]">Ticker</th>
+                    <th className="p-2 border-b border-[#504945]">Price</th>
+                    <th className="p-2 border-b border-[#504945]">Change</th>
+                    <th className="p-2 border-b border-[#504945]">Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                {events.map((ev, i) => (
+                    <tr key={i} className="border-b border-[#3c3836] hover:bg-[#282828] transition-colors">
+                        <td className="p-2 text-[#ebdbb2] whitespace-nowrap">{ev.timestamp.split('.')[0]}</td>
+                        <td className="p-2">
+                            <span className={`px-1.5 py-0.5 rounded-sm font-bold ${ev.event_type === 'BUY' ? 'bg-[#b8bb26] text-[#282828]' :
+                                ev.event_type.startsWith('SELL') ? 'bg-[#fb4934] text-[#282828]' :
+                                    'bg-[#3c3836] text-[#a89984]'
+                                }`}>
+                                {ev.event_type}
+                            </span>
+                        </td>
+                        <td className="p-2 text-[#83a598]">{ev.ticker || '-'}</td>
+                        <td className="p-2 text-[#fabd2f]">{ev.price ? parseFloat(ev.price).toFixed(2) : '-'}</td>
+                        <td className={`p-2 ${parseFloat(ev.money_change) > 0 ? 'text-[#b8bb26]' : parseFloat(ev.money_change) < 0 ? 'text-[#fb4934]' : 'text-[#a89984]'}`}>
+                            {ev.money_change !== '0.0' ? parseFloat(ev.money_change).toFixed(2) : '-'}
+                        </td>
+                        <td className="p-2 text-[#ebdbb2] font-bold">{parseFloat(ev.portfolio_balance).toFixed(2)}</td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    </div>
+);
+
+
 const OptimizationPanel = ({ params, onRun, loading, results, onApplyParams }) => {
     const [config, setConfig] = useState({
         ranges: {}, // param -> {min, max, step, type}
@@ -296,6 +335,7 @@ const OptimizationPanel = ({ params, onRun, loading, results, onApplyParams }) =
 
 const App = () => {
     const [activeTab, setActiveTab] = useState('strategies'); // strategies, results, analysis
+    const [resultsSubTab, setResultsSubTab] = useState('chart'); // chart, trades
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState(null);
     const [error, setError] = useState(null);
@@ -342,8 +382,8 @@ const App = () => {
     };
 
     const [params, setParams] = useState({
-        start_date: '2025-01-01',
-        end_date: '2025-12-31',
+        start_date: '2012-01-01',
+        end_date: '2012-12-31',
         initial_balance: 10000,
         slippage: 0.001,
         broker_fee: 0.001,
@@ -383,23 +423,34 @@ const App = () => {
 
     // Resize Chart on Tab Switch
     useEffect(() => {
-        if (activeTab === 'results' && results?.plot_json) {
+        if (activeTab === 'results' && resultsSubTab === 'chart' && results?.plot_json) {
             setTimeout(() => {
-                Plotly.react('chart-container-full', results.plot_json.data, results.plot_json.layout, {
-                    responsive: true,
-                    paper_bgcolor: '#1d2021',
-                    plot_bgcolor: '#1d2021',
-                    font: { color: '#ebdbb2' },
-                    xaxis: { gridcolor: '#504945' },
-                    yaxis: { gridcolor: '#504945' }
-                });
+                const container = document.getElementById('chart-container-full');
+                if (container) {
+                    const responsiveLayout = {
+                        ...results.plot_json.layout,
+                        width: undefined, // Override fixed values
+                        height: undefined,
+                        autosize: true,
+                        margin: { t: 40, b: 40, l: 60, r: 60 } // Optional: ensure good margins
+                    };
+
+                    Plotly.react('chart-container-full', results.plot_json.data, responsiveLayout, {
+                        responsive: true,
+                        paper_bgcolor: '#1d2021',
+                        plot_bgcolor: '#1d2021',
+                        font: { color: '#ebdbb2' },
+                        xaxis: { gridcolor: '#504945' },
+                        yaxis: { gridcolor: '#504945' }
+                    });
+                }
             }, 50);
         }
         // Force refresh codemirror when strategy tab becomes active to prevent visual glitches
         if (activeTab === 'strategies' && cmInstance.current) {
             setTimeout(() => cmInstance.current.refresh(), 50);
         }
-    }, [activeTab, results]);
+    }, [activeTab, results, resultsSubTab]);
 
 
     // Resize Logic
@@ -787,13 +838,31 @@ const App = () => {
                                                 {results.metrics.max_drawdown_pct.toFixed(2)}%
                                             </p>
                                         </div>
+                                        <div className="flex items-center gap-1 border-l border-[#504945] pl-8">
+                                            <button
+                                                onClick={() => setResultsSubTab('chart')}
+                                                className={`px-3 py-1 text-[10px] font-bold uppercase rounded-sm transition-colors ${resultsSubTab === 'chart' ? 'bg-[#fe8019] text-[#282828]' : 'bg-[#3c3836] text-[#a89984] hover:bg-[#504945]'}`}
+                                            >
+                                                Chart
+                                            </button>
+                                            <button
+                                                onClick={() => setResultsSubTab('trades')}
+                                                className={`px-3 py-1 text-[10px] font-bold uppercase rounded-sm transition-colors ${resultsSubTab === 'trades' ? 'bg-[#fe8019] text-[#282828]' : 'bg-[#3c3836] text-[#a89984] hover:bg-[#504945]'}`}
+                                            >
+                                                Trades
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="text-xs text-[#a89984] font-mono border border-[#504945] px-2 py-1 rounded">
                                         {results.metrics.total_trades} TRADES
                                     </div>
                                 </div>
-                                <div className="flex-grow p-0">
-                                    <div id="chart-container-full" className="w-full h-full bg-[#1d2021]"></div>
+                                <div className="flex-grow p-0 overflow-hidden">
+                                    {resultsSubTab === 'chart' ? (
+                                        <div id="chart-container-full" className="w-full h-full bg-[#1d2021]"></div>
+                                    ) : (
+                                        <TradesTable events={results.event_log} />
+                                    )}
                                 </div>
                             </>
                         )}

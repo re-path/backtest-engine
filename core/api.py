@@ -161,7 +161,7 @@ async def run_backtest_endpoint(request: BacktestRequest):
             "status": "success",
             "metrics": metrics_dict,
             "plot_json": json.loads(plot_json), 
-            "event_log_summary": event_log_dict[:50] 
+            "event_log": event_log_dict
         }
 
     except Exception as e:
