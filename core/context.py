@@ -247,3 +247,44 @@ class Context:
             remaining_orders.append(order)
         
         self.pending_orders = remaining_orders
+
+    def load_model(self, model_name: str) -> Any:
+        """
+        Loads a trained model (or any pickled object) from the data/ directory.
+        """
+        import pickle
+        import os
+        
+        # Security: prevent directory traversal
+        model_name = os.path.basename(model_name)
+        
+        base_path = "data"
+        possible_paths = [
+            os.path.join(base_path, model_name),
+            os.path.join(base_path, f"{model_name}.pkl"),
+            os.path.join(base_path, f"{model_name}.joblib"),
+            os.path.join(base_path, f"{model_name}.h5"), # for Keras/LSTM if saved that way
+        ]
+        
+        target_path = None
+        for p in possible_paths:
+            if os.path.exists(p):
+                target_path = p
+                break
+        
+        if not target_path:
+            # Check if it's a directory (e.g. for some model formats)
+            if os.path.isdir(os.path.join(base_path, model_name)):
+                # Just return the path, the user might know how to load it (e.g. keras.models.load_model)
+                return os.path.join(base_path, model_name)
+            raise FileNotFoundError(f"Model {model_name} not found in {base_path}")
+            
+        # If it's a file, try to unpickle it
+        try:
+            with open(target_path, 'rb') as f:
+                return pickle.load(f)
+        except Exception:
+            # If pickle fails, maybe it's a different format (like joblib or h5)
+            # For now, return the path and let the strategy handle special loading if needed
+            return target_path
+

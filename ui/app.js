@@ -357,9 +357,8 @@ const App = () => {
                         <span className="font-bold text-sm tracking-tight hidden md:inline text-[#ebdbb2]">Backtest<span className="text-[#fe8019]">Engine</span></span>
                     </div>
 
-                    {/* Navigation Tabs - Gruvbox Style */}
                     <div className="flex space-x-1 h-full items-end">
-                        {['strategies', 'results', 'analysis', 'optimize'].map(tab => (
+                        {['strategies', 'results', 'analysis', 'optimize', 'ml_studio'].map(tab => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
@@ -367,7 +366,7 @@ const App = () => {
                                     ? 'bg-[#1d2021] text-[#ebdbb2] border-[#fe8019]'
                                     : 'text-[#a89984] hover:bg-[#3c3836] hover:text-[#d4d4d4] border-transparent'}`}
                             >
-                                {tab.toUpperCase()}
+                                {tab.replace('_', ' ').toUpperCase()}
                             </button>
                         ))}
                     </div>
@@ -659,6 +658,15 @@ const App = () => {
                             results={optimizationResults}
                             onApplyParams={applyOptimizedParams}
                         />
+                    </div>
+                )}
+
+                {/* 
+                   ML STUDIO TAB
+                */}
+                {activeTab === 'ml_studio' && (
+                    <div className="h-full absolute inset-0 z-10">
+                        <MLPanel />
                     </div>
                 )}
             </div>

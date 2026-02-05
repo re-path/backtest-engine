@@ -13,7 +13,12 @@ import itertools
 import plotly.express as px
 from tqdm import tqdm
 from typing import List, Dict, Any, Optional, Union, Set, Tuple, Type
+import duckdb
+from dotenv import load_dotenv
 from core.context import Context
+from core.datasources.sources import FloorsheetSource
+
+load_dotenv()
 
 
 def filesystem_datasource(start_time, end_time):
@@ -49,6 +54,12 @@ def filesystem_datasource(start_time, end_time):
         return pd.DataFrame(columns=['timestamp', 'ticker', 'price'])
         
     return pd.concat(dfs, ignore_index=True)
+
+
+
+def duckdb_datasource(start_time, end_time):
+    ds = FloorsheetSource()
+    return ds.query(start_time, end_time)
 
 class BacktestEngineWithSource:
     def __init__(self, data_source_func, start_time, end_time, interval, strategy_cls, initial_money=100, slippage=0.20, broker_fee=0.0, annual_interest_rate=0.0, execution_delay=0, strategy_params=None):

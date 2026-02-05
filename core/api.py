@@ -9,6 +9,8 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 import os
 import glob
+import io
+from contextlib import redirect_stdout
 
 from core.engine import BacktestEngineWithSource, plot_simulation_trades, filesystem_datasource
 from core.analysis import analyze_portfolio
@@ -335,3 +337,84 @@ async def get_ticker_ohlc(ticker: str):
     # Sort by time
     all_data.sort(key=lambda x: x["time"])
     return all_data
+
+# --- ML Model Management ---
+
+class TrainRequest(BaseModel):
+    name: str
+    code: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+@app.get("/models")
+async def list_models():
+    """List available models in the data/ directory."""
+    if not os.path.exists("data"):
+        return []
+    
+    files = []
+    try:
+        for f in os.listdir("data"):
+            if os.path.isfile(os.path.join("data", f)) and not f.startswith('.'):
+                files.append(f)
+    except Exception:
+        pass
+    return sorted(files)
+
+@app.post("/train")
+async def train_model(request: TrainRequest):
+    """
+    Execute python code to train a model.
+    Injects 'save_model(obj)' into the local scope.
+    """
+    os.makedirs("data", exist_ok=True)
+    output_buffer = io.StringIO()
+    
+    def save_model(obj, filename=None):
+        import pickle
+        fname = filename or request.name
+        if "." not in fname:
+            fname += ".pkl"
+        path = os.path.join("data", fname)
+        with open(path, 'wb') as f:
+            pickle.dump(obj, f)
+        print(f"Model saved to {path}")
+
+    # Fetch data if dates provided
+    training_data = pd.DataFrame()
+    if request.start_date and request.end_date:
+        try:
+            print(f">>> Fetching training data from {request.start_date} to {request.end_date}...")
+            training_data = filesystem_datasource(request.start_date, request.end_date)
+            print(f">>> Fetched {len(training_data)} rows of data.")
+        except Exception as e:
+            print(f">>> Error fetching data: {e}")
+
+    # Inject useful globals
+    local_scope = {
+        "save_model": save_model,
+        "pd": pd,
+        "np": np,
+        "data": training_data
+    }
+
+    try:
+        with redirect_stdout(output_buffer):
+            print(f">>> ML Studio: Starting training for '{request.name}'...")
+            # Execute the training code
+            exec(request.code, globals(), local_scope)
+            print(">>> Training session completed.")
+            
+        return {
+            "status": "success", 
+            "output": output_buffer.getvalue()
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "output": output_buffer.getvalue()
+        }
+
