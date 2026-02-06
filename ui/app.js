@@ -1,6 +1,8 @@
 const { useState, useEffect, useRef, useCallback } = React;
 
-// --- Defaults ---
+const START_TIME_FOR_BACKTEST = '2024-01-01'
+const END_TIME_FOR_BACKTEST = '2024-03-01'
+
 const DEFAULT_STRATEGY = `class Strategy:
     def __init__(self, **kwargs):
         # Strategy parameters are passed to __init__
@@ -102,18 +104,16 @@ const App = () => {
             if (cmInstance.current) {
                 cmInstance.current.setValue(content);
             }
-            // Set name from filename without extension
             const name = file.name.replace(/\.[^/.]+$/, "");
             setStrategyName(name);
         };
         reader.readAsText(file);
-        // Reset value so same file can be selected again
         event.target.value = '';
     };
 
     const [params, setParams] = useState({
-        start_date: '2012-01-01',
-        end_date: '2012-12-31',
+        start_date: START_TIME_FOR_BACKTEST,
+        end_date: END_TIME_FOR_BACKTEST,
         initial_balance: 10000,
         slippage: 0.001,
         broker_fee: 0.001,
