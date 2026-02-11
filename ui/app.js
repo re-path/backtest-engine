@@ -325,36 +325,53 @@ const App = () => {
 
             {/* Header */}
             <header className="bg-[#282828] border-b border-[#504945] h-12 flex items-center px-4 justify-between flex-shrink-0 select-none z-20">
-                <div className="flex items-center space-x-6">
-                    <div className="flex items-center space-x-2 text-[#fe8019]">
-                        <IconCode />
-                        <span className="font-bold text-sm tracking-tight hidden md:inline text-[#ebdbb2]">Backtest<span className="text-[#fe8019]">Engine</span></span>
+                <div className="flex items-center justify-between w-full px-4">
+                    {/* Left Group (Tools) */}
+                    <div className="flex items-center space-x-6 h-full">
+                        <div className="flex items-center space-x-2 text-[#fe8019]">
+                            <IconCode />
+                            <span className="font-bold text-sm tracking-tight hidden md:inline text-[#ebdbb2]">Backtest<span className="text-[#fe8019]">Engine</span></span>
+                        </div>
+                        <div className="flex space-x-1 h-full items-end ml-4 border-l border-[#504945] pl-4">
+                            {['manual_analysis', 'sql_snippets'].map(tab => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setActiveTab(tab)}
+                                    className={`px-4 py-2 text-xs font-bold border-t-2 transition-all h-full ${activeTab === tab
+                                        ? 'bg-[#1d2021] text-[#83a598] border-[#83a598]'
+                                        : 'text-[#a89984] hover:bg-[#3c3836] hover:text-[#d3869b] border-transparent'}`}
+                                >
+                                    {tab.replace('_', ' ').toUpperCase()}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
-                    <div className="flex space-x-1 h-full items-end">
-                        {['strategies', 'results', 'analysis', 'optimize', 'ml_studio'].map(tab => (
-                            <button
-                                key={tab}
-                                onClick={() => setActiveTab(tab)}
-                                className={`px-4 py-2 text-xs font-medium border-t-2 transition-all h-full ${activeTab === tab
-                                    ? 'bg-[#1d2021] text-[#ebdbb2] border-[#fe8019]'
-                                    : 'text-[#a89984] hover:bg-[#3c3836] hover:text-[#d4d4d4] border-transparent'}`}
-                            >
-                                {tab.replace('_', ' ').toUpperCase()}
-                            </button>
-                        ))}
-                    </div>
-                </div>
+                    {/* Right Group (Strategy) */}
+                    <div className="flex items-center space-x-4 h-full">
+                        <div className="flex space-x-1 h-full items-end">
+                            {['strategies', 'results', 'performance', 'optimize', 'ml_studio'].map(tab => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setActiveTab(tab)}
+                                    className={`px-4 py-2 text-xs font-medium border-t-2 transition-all h-full ${activeTab === tab
+                                        ? 'bg-[#1d2021] text-[#ebdbb2] border-[#fe8019]'
+                                        : 'text-[#a89984] hover:bg-[#3c3836] hover:text-[#d4d4d4] border-transparent'}`}
+                                >
+                                    {tab.replace('_', ' ').toUpperCase()}
+                                </button>
+                            ))}
+                        </div>
 
-                <div>
-                    <button
-                        onClick={runBacktest}
-                        disabled={loading}
-                        className={`bg-[#fe8019] hover:bg-[#fabd2f] text-[#282828] px-4 py-1.5 rounded-sm font-bold text-xs flex items-center space-x-2 transition-colors ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                        {loading ? <span className="animate-spin h-3 w-3 border-2 border-[#282828]/30 border-t-[#282828] rounded-full"></span> : <IconPlay />}
-                        <span>RUN STRATEGY</span>
-                    </button>
+                        <button
+                            onClick={runBacktest}
+                            disabled={loading}
+                            className={`bg-[#fe8019] hover:bg-[#fabd2f] text-[#282828] px-4 py-1.5 rounded-sm font-bold text-xs flex items-center space-x-2 transition-colors ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            {loading ? <span className="animate-spin h-3 w-3 border-2 border-[#282828]/30 border-t-[#282828] rounded-full"></span> : <IconPlay />}
+                            <span>RUN STRATEGY</span>
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -564,9 +581,9 @@ const App = () => {
                 )}
 
                 {/* 
-                   ANALYSIS TAB
+                   PERFORMANCE TAB (formerly Analysis)
                 */}
-                {activeTab === 'analysis' && (
+                {activeTab === 'performance' && (
                     <div className="h-full overflow-y-auto bg-[#1d2021] p-8 absolute inset-0 z-10">
                         {!results ? (
                             <div className="flex-grow flex flex-col items-center justify-center text-[#504945] pt-20">
@@ -617,6 +634,22 @@ const App = () => {
                                 </div>
                             </div>
                         )}
+                    </div>
+                )}
+
+
+                {activeTab === 'manual_analysis' && (
+                    <div className="h-full absolute inset-0 z-10">
+                        <ManualAnalysisPanel />
+                    </div>
+                )}
+
+                {/* 
+                   SQL SNIPPETS TAB
+                */}
+                {activeTab === 'sql_snippets' && (
+                    <div className="h-full absolute inset-0 z-10">
+                        <SQLSnippetsPanel />
                     </div>
                 )}
 

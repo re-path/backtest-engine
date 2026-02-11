@@ -89,6 +89,61 @@ async def save_strategy(strategy: StrategyModel):
 
 
 
+
+NOTEBOOKS_DIR = "resources/notebooks"
+os.makedirs(NOTEBOOKS_DIR, exist_ok=True)
+
+class NotebookModel(BaseModel):
+    name: str
+
+@app.get("/notebooks")
+async def list_notebooks():
+    notebooks = []
+    files = glob.glob(os.path.join(NOTEBOOKS_DIR, "*.py"))
+    for f in files:
+        try:
+            name = os.path.basename(f).replace(".py", "")
+            notebooks.append({
+                "name": name,
+                "date": datetime.fromtimestamp(os.path.getmtime(f)).isoformat(),
+            })
+        except Exception:
+            continue
+    return sorted(notebooks, key=lambda x: x['date'], reverse=True)
+
+@app.post("/notebooks")
+async def create_notebook(notebook: NotebookModel):
+    safe_name = "".join([c for c in notebook.name if c.isalpha() or c.isdigit() or c in (' ', '_', '-')]).rstrip()
+    if not safe_name:
+        raise HTTPException(status_code=400, detail="Invalid notebook name")
+        
+    file_path = os.path.join(NOTEBOOKS_DIR, f"{safe_name}.py")
+    
+    if os.path.exists(file_path):
+        raise HTTPException(status_code=400, detail="Notebook already exists")
+    
+    # Minimal Marimo Template
+    template = '''import marimo
+
+__generated_with = "0.10.9"
+app = marimo.App(width="full")
+
+@app.cell
+def _():
+    import marimo as mo
+    return (mo,)
+
+if __name__ == "__main__":
+    app.run()
+'''
+    try:
+        with open(file_path, 'w') as file:
+            file.write(template)
+        return {"status": "success", "message": f"Created {safe_name}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class BacktestRequest(BaseModel):
     start_date: str  
     end_date: str    
@@ -436,4 +491,79 @@ async def train_model(request: TrainRequest):
             "traceback": traceback.format_exc(),
             "output": output_buffer.getvalue()
         }
+
+# --- SQL Snippets Management ---
+
+SQL_SNIPPETS_DIR = "resources/sql_snippets"
+os.makedirs(SQL_SNIPPETS_DIR, exist_ok=True)
+# Ensure General category exists
+os.makedirs(os.path.join(SQL_SNIPPETS_DIR, "General"), exist_ok=True)
+
+class SQLSnippetModel(BaseModel):
+    name: str
+    category: str = "General"
+    code: str
+
+@app.get("/sql-snippets")
+async def list_sql_snippets():
+    """
+    Returns a dictionary of categories to list of snippets.
+    {
+        "General": [ { "name": "all_trades", "code": "SELECT * ...", "path": "General/all_trades.sql" } ],
+        "Other": ...
+    }
+    """
+    snippets = {}
+    
+    # Walk through the directory
+    for root, dirs, files in os.walk(SQL_SNIPPETS_DIR):
+        category = os.path.relpath(root, SQL_SNIPPETS_DIR)
+        if category == ".":
+            category = "Uncategorized"
+        
+        snippet_list = []
+        for f in files:
+            if f.endswith(".sql"):
+                try:
+                    full_path = os.path.join(root, f)
+                    with open(full_path, 'r') as file:
+                        code = file.read()
+                    
+                    name = f.replace(".sql", "")
+                    snippet_list.append({
+                        "name": name,
+                        "code": code,
+                        "path": os.path.join(category, f),
+                        "date": datetime.fromtimestamp(os.path.getmtime(full_path)).isoformat()
+                    })
+                except Exception:
+                    continue
+        
+        if snippet_list:
+            # Sort by date
+            snippet_list.sort(key=lambda x: x['date'], reverse=True)
+            snippets[category] = snippet_list
+            
+    return snippets
+
+@app.post("/sql-snippets")
+async def save_sql_snippet(snippet: SQLSnippetModel):
+    # Sanitize inputs
+    safe_cat = "".join([c for c in snippet.category if c.isalpha() or c.isdigit() or c in (' ', '_', '-')]).strip() or "General"
+    safe_name = "".join([c for c in snippet.name if c.isalpha() or c.isdigit() or c in (' ', '_', '-')]).strip()
+    
+    if not safe_name:
+        raise HTTPException(status_code=400, detail="Invalid snippet name")
+        
+    category_dir = os.path.join(SQL_SNIPPETS_DIR, safe_cat)
+    os.makedirs(category_dir, exist_ok=True)
+    
+    file_path = os.path.join(category_dir, f"{safe_name}.sql")
+    
+    try:
+        with open(file_path, 'w') as file:
+            file.write(snippet.code)
+        return {"status": "success", "message": f"Saved {safe_cat}/{safe_name}", "category": safe_cat}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 

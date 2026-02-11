@@ -1,0 +1,13 @@
+[display]
+theme = "dark"
+default_width = "full"
+
+[keymap]
+preset = "vim"
+
+[runtime]
+output_max_bytes = 1000000000
+std_stream_max_bytes = 1000000000
+
+[server]
+browser = "chrome"

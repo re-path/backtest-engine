@@ -1,0 +1,1 @@
+SELECT * FROM trades LIMIT 100;
