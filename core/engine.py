@@ -16,7 +16,7 @@ from typing import List, Dict, Any, Optional, Union, Set, Tuple, Type
 import duckdb
 from dotenv import load_dotenv
 from core.context import Context
-from core.datasources.sources import FloorsheetSource
+from core.datasources.sources import FloorsheetSource, DailyCloseSource
 
 load_dotenv()
 
@@ -58,7 +58,7 @@ def filesystem_datasource(start_time, end_time):
 
 
 def duckdb_datasource(start_time, end_time):
-    ds = FloorsheetSource()
+    ds = DailyCloseSource()
     return ds.query(start_time, end_time)
 
 class BacktestEngineWithSource:

@@ -1,44 +1,5 @@
 const MLPanel = () => {
-    const [trainingCode, setTrainingCode] = React.useState(`
-# Example: Training a Random Forest Model
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-import pandas as pd
-import numpy as np
-
-# 1. Access the data (injected by backend if dates are selected)
-if data.empty:
-    print("Warning: No data loaded. Using dummy data for demonstration.")
-    data = pd.DataFrame({
-        'feature1': np.random.rand(100),
-        'feature2': np.random.rand(100),
-        'target': np.random.rand(100)
-    })
-else:
-    print(f"Using {len(data)} rows of loaded data.")
-    # Example: use 'price' as target and dummy feature
-    if 'price' in data.columns:
-        data['target'] = data['price'].shift(-1) # Predict next price
-        data['feature1'] = data['price']
-        data = data.dropna()
-
-X = data[['feature1']]
-y = data['target']
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-
-# 2. Define Architecture
-model = RandomForestRegressor(n_estimators=100)
-
-# 3. Train
-model.fit(X_train, y_train)
-
-# 4. Save Model (save_model is injected by the backend)
-save_model(model, "my_rf_model")
-
-print("Model training complete.")
-print("Test Score:", model.score(X_test, y_test))
-`);
+    const [trainingCode, setTrainingCode] = React.useState("");
     const [modelName, setModelName] = React.useState('my_rf_model');
     const [startDate, setStartDate] = React.useState('2012-01-01');
     const [endDate, setEndDate] = React.useState('2012-12-31');
@@ -77,7 +38,15 @@ print("Test Score:", model.score(X_test, y_test))
             cmInstance.current.on('change', (doc) => {
                 setTrainingCode(doc.getValue());
             });
-            cmInstance.current.setValue(trainingCode);
+
+            // Fetch initial code
+            fetch('/resources/ml_models/random_forest_initial.py')
+                .then(res => res.text())
+                .then(text => {
+                    setTrainingCode(text);
+                    if (cmInstance.current) cmInstance.current.setValue(text);
+                })
+                .catch(err => console.error("Failed to load initial ML code", err));
         }
     }, []);
 
@@ -110,104 +79,28 @@ print("Test Score:", model.score(X_test, y_test))
     };
 
     const loadTemplate = (type) => {
-        let template = '';
+        let resourcePath = '';
         if (type === 'LSTM') {
-            template = `
-# LSTM Architecture (Requires TensorFlow/Keras)
-import numpy as np
-import pandas as pd
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
-
-# Use 'data' variable provided by backend
-if data.empty:
-    dataset = np.random.rand(100, 1)
-else:
-    dataset = data[['price']].values
-
-def create_dataset(dataset, look_back=1):
-    dataX, dataY = [], []
-    for i in range(len(dataset)-look_back-1):
-        a = dataset[i:(i+look_back), 0]
-        dataX.append(a)
-        dataY.append(dataset[i + look_back, 0])
-    return np.array(dataX), np.array(dataY)
-
-look_back = 5
-X, y = create_dataset(dataset, look_back)
-X = np.reshape(X, (X.shape[0], 1, X.shape[1]))
-
-# Define Architecture
-model = Sequential([
-    LSTM(4, input_shape=(1, look_back)),
-    Dense(1)
-])
-model.compile(loss='mean_squared_error', optimizer='adam')
-
-# Train
-model.fit(X, y, epochs=5, batch_size=1, verbose=2)
-
-# Save
-save_model(model, "lstm_model")
-`;
+            resourcePath = '/resources/ml_models/lstm_template.py';
         } else if (type === 'Boosting') {
-            template = `
-# Gradient Boosting Example
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.model_selection import train_test_split
-import pandas as pd
-import numpy as np
-
-# Use 'data' variable provided by backend
-if data.empty:
-    X = np.random.rand(100, 2)
-    y = np.random.rand(100)
-else:
-    # Example: Simple features from price
-    data['prev_price'] = data['price'].shift(1)
-    data = data.dropna()
-    X = data[['prev_price']]
-    y = data['price']
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-
-# Architecture
-model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1)
-
-# Train
-model.fit(X_train, y_train)
-
-# Save
-save_model(model, "boosting_model")
-print("Trained Boosting model on actual data.")
-`;
+            resourcePath = '/resources/ml_models/boosting_template.py';
         } else {
-            template = `
-# Random Forest Example
-from sklearn.ensemble import RandomForestRegressor
-import pandas as pd
-import numpy as np
-
-# Use 'data' variable provided by backend
-if not data.empty:
-    X = data[['price']].shift(1).dropna()
-    y = data['price'].iloc[1:]
-else:
-    X = np.random.rand(100, 1)
-    y = np.random.rand(100)
-
-# Architecture
-model = RandomForestRegressor(n_estimators=50)
-
-# Train
-model.fit(X, y)
-
-# Save
-save_model(model, "rf_model")
-`;
+            resourcePath = '/resources/ml_models/random_forest_template.py';
         }
-        setTrainingCode(template.trim());
-        if (cmInstance.current) cmInstance.current.setValue(template.trim());
+
+        fetch(resourcePath)
+            .then(res => {
+                if (!res.ok) throw new Error(`Failed to load ${type} template`);
+                return res.text();
+            })
+            .then(template => {
+                setTrainingCode(template.trim());
+                if (cmInstance.current) cmInstance.current.setValue(template.trim());
+            })
+            .catch(err => {
+                console.error(err);
+                setOutput(`Error loading template: ${err.message}`);
+            });
     };
 
     return (

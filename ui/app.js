@@ -3,67 +3,7 @@ const { useState, useEffect, useRef, useCallback } = React;
 const START_TIME_FOR_BACKTEST = '2024-01-01'
 const END_TIME_FOR_BACKTEST = '2024-03-01'
 
-const DEFAULT_STRATEGY = `class Strategy:
-    def __init__(self, **kwargs):
-        # Strategy parameters are passed to __init__
-        self.params = kwargs
-
-    def on_bar(self, context, bar):
-        """
-        Main Strategy Logic
-        
-        API Documentation:
-        ------------------
-        Accessing Data:
-          bar.price       (float) : Current close price of the asset
-          bar.timestamp   (params): Current timestamp (pandas Timestamp)
-          bar.ticker      (str)   : Ticker symbol
-          
-        Context (State & Actions):
-          context.get_balance()           : Current available cash (Affected by fees & interest)
-          context.get_positions()         : Dictionary of active positions {ticker: Position}
-          
-          # NOTE: Broker fees and Interest rates are configured in the right panel
-          # and applied automatically by the engine.
-          
-          # STATE MANAGEMENT (CRITICAL):
-          # Do NOT use self.variable = x. Use context.get/set instead.
-          context.set(key, value)         : Store a value
-          context.get(key, default=None)  : Retrieve a value, returns default if not found
-          
-          # TRADING ACTIONS:
-          context.buy(ticker, money_amount, price, time)
-          context.buy_protected(ticker, share_count, price, time) # Shares (10, 20, 30...)
-          context.sell(ticker, share_fraction, price, time, reason="SELL")
-          context.close(ticker, price, time, reason="CLOSE") # Close entire position
-          
-        """
-        
-        # Example 1: Use context.get() to manage state
-        # Let's count how many bars we've seen for this ticker
-        ticker_count_key = f"{bar.ticker}_count"
-        current_count = context.get(ticker_count_key, 0)
-        context.set(ticker_count_key, current_count + 1)
-        
-        # Example 2: Accessing Parameters
-        buy_probability = self.params.get('buy_prob', 0.10) 
-        
-        # Example 3: Trading Logic (Protected)
-        # buy_protected requires share counts in multiples of 10
-        import random
-        if random.random() < buy_probability:
-             # Buy 10 shares if we have enough balance
-             # This automatically calculates and deducts the cash required.
-             context.buy_protected(bar.ticker, 10, bar.price, bar.timestamp)
-        
-        # Example 4: Risk Management
-        positions = context.get_positions()
-        if bar.ticker in positions:
-             pos = positions[bar.ticker]
-             # Check for 5% profit
-             if bar.price > pos.entry_price * 1.05:
-                  context.sell(bar.ticker, pos.share_units, bar.price, bar.timestamp, "SELL")
-`;
+const DEFAULT_STRATEGY = "";
 
 const App = () => {
     const [activeTab, setActiveTab] = useState('strategies'); // strategies, results, analysis
@@ -147,7 +87,14 @@ const App = () => {
                 setCode(doc.getValue());
             });
 
-            cmInstance.current.setValue(DEFAULT_STRATEGY);
+            // Fetch default strategy
+            fetch('/resources/strategies/default_strategy.py')
+                .then(res => res.text())
+                .then(text => {
+                    setCode(text);
+                    if (cmInstance.current) cmInstance.current.setValue(text);
+                })
+                .catch(err => console.error("Failed to load default strategy", err));
         }
     }, []);
 
@@ -227,6 +174,33 @@ const App = () => {
             }
 
             const data = await response.json();
+
+            // Ensure metrics exist to prevent UI crashes
+            if (!data.metrics || Object.keys(data.metrics).length === 0) {
+                data.metrics = {
+                    total_return_pct: 0,
+                    total_net_profit: 0,
+                    max_drawdown_pct: 0,
+                    avg_trade_net_profit: 0,
+                    avg_winning_trade: 0,
+                    avg_losing_trade: 0,
+                    largest_winning_trade: 0,
+                    largest_losing_trade: 0,
+                    gross_profit: 0,
+                    gross_loss: 0,
+                    profit_factor: 0,
+                    pct_profitable: 0,
+                    daily_two_sigma_pct: 0,
+                    total_trades: 0,
+                    drawdown_depth_money: 0,
+                    decline_duration_days: 0,
+                    recovery_status_str: 'N/A',
+                    max_consec_winning: 0,
+                    max_consec_losing: 0,
+                    daily_var_5pct: 0,
+                };
+            }
+
             setResults(data);
             setActiveTab('results'); // Auto switch to results
         } catch (err) {

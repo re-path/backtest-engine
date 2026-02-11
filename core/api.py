@@ -12,9 +12,10 @@ import glob
 import io
 from contextlib import redirect_stdout
 
-from core.engine import BacktestEngineWithSource, plot_simulation_trades, filesystem_datasource
+from core.engine import BacktestEngineWithSource, plot_simulation_trades, filesystem_datasource, duckdb_datasource
 from core.analysis import analyze_portfolio
 from core.context import Context 
+from core.datasources.sources import DailyOHLCSource 
 
 app = FastAPI()
 
@@ -138,7 +139,7 @@ async def run_backtest_endpoint(request: BacktestRequest):
                 raise HTTPException(status_code=400, detail=f"Error compiling strategy: {str(e)}")
 
         engine = BacktestEngineWithSource(
-            data_source_func=filesystem_datasource,
+            data_source_func=duckdb_datasource,
             start_time=start_dt,
             end_time=end_dt,
             interval=pd.Timedelta(days=1), 
@@ -227,7 +228,7 @@ async def run_optimization(request: OptimizationRequest):
             full_params = {**request.base_params, **params}
             
             engine = BacktestEngineWithSource(
-                data_source_func=filesystem_datasource, 
+                data_source_func=duckdb_datasource, 
                 start_time=start_dt,
                 end_time=end_dt,
                 interval=pd.Timedelta(days=1), 
@@ -292,51 +293,59 @@ async def get_last_log():
 @app.get("/ticker/{ticker}/ohlc")
 async def get_ticker_ohlc(ticker: str):
     """
-    Fetch OHLC data for a specific ticker across all available dates in data/old_data.
+    Fetch OHLC data for a specific ticker across a broad date range from DuckDB.
     """
-    base_path = "data/old_data"
-    all_data = []
-    
-    # We'll reuse the logic from filesystem_datasource but filtered for one ticker
-    # and extracting OHLC columns.
-    years = sorted([d for d in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, d))])
-    
-    for year in years:
-        year_path = os.path.join(base_path, year)
-        files = sorted(glob.glob(os.path.join(year_path, "*.csv")))
+    try:
+        # Use a wide range to capture all history
+        start_time = "2010-01-01" 
+        end_time = datetime.now().strftime("%Y-%m-%d")
         
-        for file_path in files:
-            try:
-                # Optimized read: only read required columns if possible
-                df = pd.read_csv(file_path, thousands=',')
-                
-                # Normalize Symbol column
-                symbol_col = 'Symbol' if 'Symbol' in df.columns else ('ticker' if 'ticker' in df.columns else None)
-                if not symbol_col: continue
-                
-                ticker_df = df[df[symbol_col] == ticker]
-                if ticker_df.empty: continue
-                
-                # Extract date from filename
-                date_str = os.path.basename(file_path).replace(".csv", "")
-                timestamp = int(pd.to_datetime(date_str).timestamp())
-                
-                # Standardize column names for TradingView JS
-                # TradingView expects: time, open, high, low, close
-                row = ticker_df.iloc[0]
-                all_data.append({
-                    "time": timestamp,
-                    "open": float(str(row.get('Open', row.get('price', 0))).replace(',', '')),
-                    "high": float(str(row.get('High', row.get('price', 0))).replace(',', '')),
-                    "low": float(str(row.get('Low', row.get('price', 0))).replace(',', '')),
-                    "close": float(str(row.get('Close', row.get('price', 0))).replace(',', ''))
-                })
-            except Exception as e:
-                print(f"Error processing {file_path} for OHLC: {e}")
-
-    # Sort by time
-    all_data.sort(key=lambda x: x["time"])
-    return all_data
+        ds = DailyOHLCSource()
+        # DailyOHLCSource returns a DataFrame with: timestamp, ticker, open, high, low, close, volume (and others per query)
+        # We need to filter for the specific ticker because DailyOHLCSource queries ALL matching globs
+        # But wait, DailyOHLCSource.query takes target_globs which are constructed from date range.
+        # It queries *everything* in that range.
+        # DuckDB filtered query is more efficient.
+        # However, BaseDuckDBSource constructs globs based on date.
+        # And the query groups by ticker.
+        # So it returns ALL tickers. That's inefficient if we just want one.
+        # But the current implementation of BaseDuckDBSource doesn't support filtering by ticker in _get_target_globs (it uses symbol=*).
+        # We can filter in the SQL query!
+        # But DailyOHLCSource.query doesn't take a ticker argument.
+        # We should use the returned DF and filter it. The DF might be huge.
+        
+        # Let's instantiate and call a custom query method? Or filter after?
+        # A better approach is to modify DailyOHLCSource to accept a ticker filter or add a method.
+        # But for now, let's filter the DF. If it's too slow, we'll optimizing sources.py.
+        # Actually, get_ticker_ohlc is often called for a specific view.
+        # Let's see if we can optimize later. For now, filter the DF.
+        
+        df = ds.query(start_time, end_time)
+        
+        if df.empty:
+            return []
+            
+        ticker_df = df[df['ticker'] == ticker]
+        
+        if ticker_df.empty:
+            return []
+            
+        # Format for frontend
+        all_data = []
+        for row in ticker_df.itertuples():
+            all_data.append({
+                "time": int(row.timestamp.timestamp()),
+                "open": float(row.open),
+                "high": float(row.high),
+                "low": float(row.low),
+                "close": float(row.close)
+            })
+            
+        return all_data
+        
+    except Exception as e:
+        print(f"Error in get_ticker_ohlc: {e}")
+        return []
 
 # --- ML Model Management ---
 
@@ -385,7 +394,7 @@ async def train_model(request: TrainRequest):
     if request.start_date and request.end_date:
         try:
             print(f">>> Fetching training data from {request.start_date} to {request.end_date}...")
-            training_data = filesystem_datasource(request.start_date, request.end_date)
+            training_data = duckdb_datasource(request.start_date, request.end_date)
             print(f">>> Fetched {len(training_data)} rows of data.")
         except Exception as e:
             print(f">>> Error fetching data: {e}")

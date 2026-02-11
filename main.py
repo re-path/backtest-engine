@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 
 app.mount("/ui", StaticFiles(directory="ui"), name="ui")
+app.mount("/resources", StaticFiles(directory="resources"), name="resources")
 
 @app.middleware("http")
 async def add_no_cache_header(request, call_next):

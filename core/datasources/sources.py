@@ -249,3 +249,89 @@ class ContextualFloorsheetSource(BaseDuckDBSource):
             traceback.print_exc()
             return pd.DataFrame()
 
+
+class DailyCloseSource(BaseDuckDBSource):
+    def query(self, start_time, end_time):
+        start_date = pd.to_datetime(start_time)
+        end_date = pd.to_datetime(end_time)
+        
+        target_globs = self._get_target_globs(start_date, end_date)
+        
+        if not target_globs:
+             return pd.DataFrame()
+
+        try:
+            # Aggregate to daily closes
+            query = """
+                SELECT 
+                    time_bucket(INTERVAL '1 day', trade_time) as timestamp,
+                    symbol as ticker,
+                    LAST(rate) as price
+                FROM read_csv(?, 
+                              hive_partitioning=1, 
+                              union_by_name=1, 
+                              filename=0,
+                              header=1,
+                              auto_detect=1,
+                              types={'trade_time': 'TIMESTAMP', 'rate': 'DOUBLE', 'symbol': 'VARCHAR'})
+                WHERE 
+                    trade_time >= ? AND trade_time < ?
+                GROUP BY timestamp, ticker
+                ORDER BY timestamp ASC
+            """
+            
+            df = self.manager.execute(query, [target_globs, start_date, end_date]).df()
+            
+            if not df.empty:
+                df['timestamp'] = pd.to_datetime(df['timestamp'])
+                
+            return df
+
+        except Exception as e:
+            print(f"DailyCloseSource Error: {e}")
+            return pd.DataFrame()
+
+class DailyOHLCSource(BaseDuckDBSource):
+    def query(self, start_time, end_time):
+        start_date = pd.to_datetime(start_time)
+        end_date = pd.to_datetime(end_time)
+        
+        target_globs = self._get_target_globs(start_date, end_date)
+        
+        if not target_globs:
+             return pd.DataFrame()
+
+        try:
+            # Aggregate to daily OHLC
+            query = """
+                SELECT 
+                    time_bucket(INTERVAL '1 day', trade_time) as timestamp,
+                    symbol as ticker,
+                    FIRST(rate) as open,
+                    MAX(rate) as high,
+                    MIN(rate) as low,
+                    LAST(rate) as close,
+                    SUM(quantity) as volume
+                FROM read_csv(?, 
+                              hive_partitioning=1, 
+                              union_by_name=1, 
+                              filename=0,
+                              header=1,
+                              auto_detect=1,
+                              types={'trade_time': 'TIMESTAMP', 'rate': 'DOUBLE', 'symbol': 'VARCHAR'})
+                WHERE 
+                    trade_time >= ? AND trade_time < ?
+                GROUP BY timestamp, ticker
+                ORDER BY timestamp ASC
+            """
+            
+            df = self.manager.execute(query, [target_globs, start_date, end_date]).df()
+            
+            if not df.empty:
+                df['timestamp'] = pd.to_datetime(df['timestamp'])
+                
+            return df
+
+        except Exception as e:
+            print(f"DailyOHLCSource Error: {e}")
+            return pd.DataFrame()
