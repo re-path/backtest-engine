@@ -30,52 +30,62 @@ class StrategyModel(BaseModel):
     params: Dict[str, Any]
     date: Optional[str] = None
 
-STRATEGIES_DIR = "strategies"
+
+STRATEGIES_DIR = "resources/strategies"
 os.makedirs(STRATEGIES_DIR, exist_ok=True)
 
 @app.get("/strategies")
 async def list_strategies():
     strategies = []
-    files = glob.glob(os.path.join(STRATEGIES_DIR, "*.json"))
+    files = glob.glob(os.path.join(STRATEGIES_DIR, "*.py"))
     for f in files:
         try:
-            with open(f, 'r') as file:
-                data = json.load(file)
-                strategies.append({
-                    "name": data.get("name"),
-                    "date": data.get("date", ""),
-                })
+            # For now, just listing the filename without parsing content for metadata
+            name = os.path.basename(f).replace(".py", "")
+            strategies.append({
+                "name": name,
+                "date": datetime.fromtimestamp(os.path.getmtime(f)).isoformat(),
+            })
         except Exception:
             continue
-    return strategies
+    return sorted(strategies, key=lambda x: x['date'], reverse=True)
 
 @app.get("/strategies/{name}")
 async def get_strategy(name: str):
-    file_path = os.path.join(STRATEGIES_DIR, f"{name}.json")
+    file_path = os.path.join(STRATEGIES_DIR, f"{name}.py")
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Strategy not found")
     
     try:
         with open(file_path, 'r') as file:
-            return json.load(file)
+            code = file.read()
+            # Return empty params as we are not persisting them in the file yet
+            # The client should handle this gracefully (e.g. keep existing params or default)
+            return {
+                "name": name,
+                "code": code,
+                "params": {} 
+            }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/strategies")
 async def save_strategy(strategy: StrategyModel):
-    file_path = os.path.join(STRATEGIES_DIR, f"{strategy.name}.json")
-    
-    # Store with current date if not provided
-    data = strategy.dict()
-    if not data.get('date'):
-        data['date'] = datetime.now().isoformat()
+    # Sanitize name
+    safe_name = "".join([c for c in strategy.name if c.isalpha() or c.isdigit() or c in (' ', '_', '-')]).rstrip()
+    if not safe_name:
+        raise HTTPException(status_code=400, detail="Invalid strategy name")
         
+    file_path = os.path.join(STRATEGIES_DIR, f"{safe_name}.py")
+    
     try:
         with open(file_path, 'w') as file:
-            json.dump(data, file, indent=4)
-        return {"status": "success", "message": f"Saved {strategy.name}"}
+            file.write(strategy.code)
+        return {"status": "success", "message": f"Saved {safe_name}"}
     except Exception as e:
+        # traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 
