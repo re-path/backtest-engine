@@ -17,3 +17,17 @@ dependencies = [
     "tqdm>=4.67.1",
     "uvicorn>=0.40.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: tests requiring real DuckDB data files on disk",
+]
+pythonpath = ["."]
+

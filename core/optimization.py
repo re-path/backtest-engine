@@ -22,7 +22,7 @@ class Optimizer:
 
     def _evaluate(self, params: Dict[str, Any]) -> OptimizationResult:
         metrics = self.objective_function(params)
-        score = metrics.get(self.target_metric, -float('inf'))
+        score = metrics.get(self.target_metric, -1e18) # Use large negative number instead of -inf for JSON compatibility
         result = OptimizationResult(params=copy.deepcopy(params), metrics=metrics, score=score)
         self.history.append(result)
         return result

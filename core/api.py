@@ -166,7 +166,7 @@ class SimpleTestStrategy:
             return
 
         if bar.price > last_price:
-            invest_amount = context.balance * 0.10 # Invest 10%
+            invest_amount = context.get_balance() * 0.10 # Invest 10%
             context.buy(bar.ticker, invest_amount, bar.price, bar.timestamp)
         elif bar.price < last_price:
             context.close(bar.ticker, bar.price, bar.timestamp, "TrendRev")

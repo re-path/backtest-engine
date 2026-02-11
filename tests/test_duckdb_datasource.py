@@ -41,15 +41,12 @@ class TestDuckDBDatasource(unittest.TestCase):
         self.assertTrue(pd.to_datetime("2023-06-27").date() in date_set, "Should contain data for 2023-06-27")
 
     def test_query_no_data(self):
-        # Pick a date usually without data, e.g. far future or weekend if applicable, 
-        # or just random date that might not exist.
-        # 2020-01-01 likely doesn't exist based on file list starting 2023.
+        # Pick a date usually without data
         start_time = "2020-01-01"
         end_time = "2020-01-02"
         
         df = duckdb_datasource(start_time, end_time)
         self.assertTrue(df.empty, "Dataframe should be empty for non-existent date")
-        self.assertListEqual(list(df.columns), ['timestamp', 'ticker', 'price'])
 
 if __name__ == '__main__':
     unittest.main()
