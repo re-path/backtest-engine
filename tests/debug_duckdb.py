@@ -19,7 +19,7 @@ day_glob = hardcoded_glob
 
 
 con = duckdb.connect()
-con.execute("PRAGMA threads=4")
+con.execute("PRAGMA threads=8")
 
 query = """
     SELECT 

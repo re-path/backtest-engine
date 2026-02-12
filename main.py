@@ -89,6 +89,45 @@ if __name__ == "__main__":
         print("Marimo started successfully.")
         return process, log_file
 
+    def run_redis(retry=True):
+        print("Starting Redis server on port 6380...")
+        cmd = [
+            "redis-server",
+            "--port", "6380",
+            "--save", "",
+            "--appendonly", "no"
+        ]
+        # Log to file for debugging
+        log_file = open("redis.log", "w+")
+        process = subprocess.Popen(cmd, stdout=log_file, stderr=log_file)
+        
+        # Check if it failed immediately
+        time.sleep(2)
+        if process.poll() is not None:
+            # It died. Check why.
+            log_file.seek(0)
+            output = log_file.read()
+            print(f"Redis failed to start. Output:\n{output[-500:]}")
+            
+            if "Address already in use" in output or "address already in use" in output:
+                if retry:
+                    print("Port 6380 in use. Attempting to kill existing process...")
+                    try:
+                        subprocess.run(["fuser", "-k", "6380/tcp"], check=False)
+                        time.sleep(1) # Wait for release
+                        return run_redis(retry=False)
+                    except Exception as e:
+                        print(f"Failed to kill process: {e}")
+            
+            # If not address in use or retry failed
+            print("WARNING: Live Context (Redis) will not be available.")
+            log_file.close()
+            return None, None
+            
+        print("Redis started successfully.")
+        return process, log_file
+
+    redis_process, redis_log = run_redis()
     marimo_process, marimo_log = run_marimo()
     
     def cleanup(signum=None, frame=None):
@@ -102,6 +141,19 @@ if __name__ == "__main__":
         if marimo_log:
             try:
                 marimo_log.close()
+            except:
+                pass
+        
+        print("Stopping Redis server...")
+        if redis_process:
+            redis_process.terminate()
+            try:
+                redis_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                redis_process.kill()
+        if redis_log:
+            try:
+                redis_log.close()
             except:
                 pass
             
