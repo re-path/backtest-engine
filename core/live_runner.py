@@ -106,8 +106,8 @@ class LiveRunner:
 
     def cleanup(self):
         print("Cleaning up...")
-        self.redis.set(f"strategy:{self.strategy_name}:status", "stopped")
-        print("Strategy stopped.")
+        # Status update is now handled by the API on stop
+        print("Strategy closed.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run a live strategy.")

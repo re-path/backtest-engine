@@ -20,7 +20,7 @@ def analyze_portfolio(event_log_df: pd.DataFrame) -> Optional[pd.DataFrame]:
 
     start_balance: float = float(event_log_df.iloc[0]['portfolio_balance'])
     end_balance: float = float(event_log_df.iloc[-1]['portfolio_balance'])
-    total_return_pct: float = (end_balance / start_balance - 1) * 100
+    total_return_pct: float = (end_balance / start_balance - 1) * 100 if start_balance > 0 else 0.0
     
     print(f"Start Portfolio: {start_balance:.2f} money")
     print(f"End Portfolio:   {end_balance:.2f} money")

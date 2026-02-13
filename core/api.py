@@ -244,6 +244,8 @@ async def run_backtest_endpoint(request: BacktestRequest):
             "event_log": event_log_dict
         }
 
+    except HTTPException as e:
+        raise e
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -578,6 +580,30 @@ async def save_sql_snippet(snippet: SQLSnippetModel):
 class LiveStrategyRequest(BaseModel):
     strategy_name: str
 
+@app.get("/live/strategies")
+async def list_live_strategies():
+    """
+    Lists all strategies and their current Redis status.
+    """
+    import redis
+    
+    REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+    REDIS_PORT = int(os.getenv("REDIS_PORT", 6380))
+    r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    
+    strategies = []
+    files = glob.glob(os.path.join(STRATEGIES_DIR, "*.py"))
+    for f in files:
+        name = os.path.basename(f).replace(".py", "")
+        status = r.get(f"strategy:{name}:status") or "stopped"
+        strategies.append({
+            "name": name,
+            "status": status,
+            "date": datetime.fromtimestamp(os.path.getmtime(f)).isoformat()
+        })
+    
+    return sorted(strategies, key=lambda x: x['name'])
+
 @app.post("/live/strategies/start")
 async def start_live_strategy(request: LiveStrategyRequest):
     """
@@ -658,13 +684,12 @@ async def stop_live_strategy(request: LiveStrategyRequest):
     
     try:
         # 2. Call ksai_proc stop
-        # ksai_proc stop --name <name>
         cmd = ["ksai_proc", "stop", "--name", strategy_name]
-        
         subprocess.run(cmd, check=True)
         
-        # 3. Verify
-        # ksai_proc stop should wait? 
+        # 3. Force update Redis to stopped
+        r.set(f"strategy:{strategy_name}:status", "stopped")
+        
         return {"status": "success", "message": f"Strategy {strategy_name} stopped"}
         
     except subprocess.CalledProcessError as e:

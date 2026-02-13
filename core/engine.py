@@ -99,9 +99,10 @@ class BacktestEngineWithSource:
                 chunk_df = chunk_df.sort_values(by=['timestamp', 'ticker'])
                 for row in chunk_df.itertuples(index=False):
                     bar = row
-                    self.context.process_pending_orders(bar.ticker, bar.price, bar.timestamp)
+                    price = getattr(bar, 'price', getattr(bar, 'close', None))
+                    self.context.process_pending_orders(bar.ticker, price, bar.timestamp)
                     self.strategy.on_bar(self.context, bar)
-                    self.last_known_prices[bar.ticker] = bar.price
+                    self.last_known_prices[bar.ticker] = price
 
             pbar.update(1)
             current_time = next_time

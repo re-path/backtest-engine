@@ -333,7 +333,7 @@ const App = () => {
                             <span className="font-bold text-sm tracking-tight hidden md:inline text-[#ebdbb2]">Backtest<span className="text-[#fe8019]">Engine</span></span>
                         </div>
                         <div className="flex space-x-1 h-full items-end ml-4 border-l border-[#504945] pl-4">
-                            {['manual_analysis', 'sql_snippets'].map(tab => (
+                            {['manual_analysis', 'sql_snippets', 'live_strategies'].map(tab => (
                                 <button
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
@@ -652,6 +652,19 @@ const App = () => {
                         <SQLSnippetsPanel />
                     </div>
                 )}
+
+                {/* 
+                   LIVE STRATEGIES TAB
+                */}
+                {activeTab === 'live_strategies' && (
+                    <div className="h-full absolute inset-0 z-10">
+                        <LiveStrategiesPanel />
+                    </div>
+                )}
+
+                {/* 
+                   RESULTS TAB
+                */}
 
                 {/* 
                    OPTIMIZE TAB

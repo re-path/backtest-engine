@@ -55,10 +55,11 @@ if __name__ == "__main__":
     API_PORT = int(os.getenv("API_PORT", 1218))
     API_HOST = os.getenv("API_HOST", "0.0.0.0")
     NOTEBOOKS_DIR = os.getenv("NOTEBOOKS_DIR", "resources/notebooks")
+    DATA_DIR = os.getenv("DATA_DIR", "data")
     
     # Ensure directories exist
-    if not os.path.exists(NOTEBOOKS_DIR):
-        os.makedirs(NOTEBOOKS_DIR, exist_ok=True)
+    os.makedirs(NOTEBOOKS_DIR, exist_ok=True)
+    os.makedirs(DATA_DIR, exist_ok=True)
         
 
     def run_marimo(retry=True):
@@ -70,8 +71,9 @@ if __name__ == "__main__":
             "--no-token",
             NOTEBOOKS_DIR
         ]
-        # Log to file for debugging
-        log_file = open("marimo.log", "w+")
+        # Log to file in data/ for debugging
+        log_path = os.path.join(DATA_DIR, "marimo.log")
+        log_file = open(log_path, "w+")
         process = subprocess.Popen(cmd, stdout=log_file, stderr=log_file)
         
         # Check if it failed immediately
@@ -102,14 +104,18 @@ if __name__ == "__main__":
 
     def run_redis(retry=True):
         print(f"Starting Redis server on port {REDIS_PORT}...")
+        # Use absolute path for DATA_DIR to be safe with --dir
+        abs_data_dir = os.path.abspath(DATA_DIR)
         cmd = [
             "redis-server",
             "--port", str(REDIS_PORT),
-            "--save", "",
+            "--dir", abs_data_dir,
+            "--save", "60 1", # Basic persistence to data/
             "--appendonly", "no"
         ]
-        # Log to file for debugging
-        log_file = open("redis.log", "w+")
+        # Log to file in data/ for debugging
+        log_path = os.path.join(DATA_DIR, "redis.log")
+        log_file = open(log_path, "w+")
         process = subprocess.Popen(cmd, stdout=log_file, stderr=log_file)
         
         # Check if it failed immediately
