@@ -1,8 +1,13 @@
 import json
 import redis
 import pandas as pd
+import os
 from typing import List, Dict, Any, Optional
 from core.context import Context, Position, StockMath
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 class ContextLive(Context):
     def __init__(self, initial_balance: float, slippage: float, execution_delay: int = 0, broker_fee: float = 0.0, annual_interest_rate: float = 0.0) -> None:
@@ -10,7 +15,9 @@ class ContextLive(Context):
         # But Context expects it, so we pass an empty list which we won't use directly
         super().__init__(initial_balance, slippage, [], execution_delay, broker_fee, annual_interest_rate)
         
-        self.redis_client = redis.Redis(host='localhost', port=6380, decode_responses=True)
+        REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+        REDIS_PORT = int(os.getenv("REDIS_PORT", 6380))
+        self.redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
         
         # Initialize keys
         self.KEY_BALANCE = "live:balance"

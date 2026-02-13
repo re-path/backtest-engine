@@ -16,6 +16,10 @@ from core.engine import BacktestEngineWithSource, plot_simulation_trades, filesy
 from core.analysis import analyze_portfolio
 from core.context import Context 
 from core.datasources.sources import DailyOHLCSource 
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = FastAPI()
 
@@ -31,7 +35,7 @@ class StrategyModel(BaseModel):
     date: Optional[str] = None
 
 
-STRATEGIES_DIR = "resources/strategies"
+STRATEGIES_DIR = os.getenv("STRATEGIES_DIR", "resources/strategies")
 os.makedirs(STRATEGIES_DIR, exist_ok=True)
 
 @app.get("/strategies")
@@ -90,7 +94,7 @@ async def save_strategy(strategy: StrategyModel):
 
 
 
-NOTEBOOKS_DIR = "resources/notebooks"
+NOTEBOOKS_DIR = os.getenv("NOTEBOOKS_DIR", "resources/notebooks")
 os.makedirs(NOTEBOOKS_DIR, exist_ok=True)
 
 class NotebookModel(BaseModel):
@@ -147,8 +151,8 @@ if __name__ == "__main__":
 class BacktestRequest(BaseModel):
     start_date: str  
     end_date: str    
-    initial_balance: float = 10000.0
-    slippage: float = 0.01
+    initial_balance: float = float(os.getenv("INITIAL_BALANCE", 10000.0))
+    slippage: float = float(os.getenv("DEFAULT_SLIPPAGE", 0.01))
     broker_fee: float = 0.0
     annual_interest_rate: float = 0.0
     strategy_params: Dict[str, Any] = {}
@@ -254,8 +258,8 @@ class OptimizationRequest(BaseModel):
     # Backtest params
     start_date: str
     end_date: str
-    initial_balance: float = 10000.0
-    slippage: float = 0.01
+    initial_balance: float = float(os.getenv("INITIAL_BALANCE", 10000.0))
+    slippage: float = float(os.getenv("DEFAULT_SLIPPAGE", 0.01))
     broker_fee: float = 0.0
     annual_interest_rate: float = 0.0
     base_params: Dict[str, Any] = {}
@@ -422,14 +426,14 @@ class TrainRequest(BaseModel):
 
 @app.get("/models")
 async def list_models():
-    """List available models in the data/ directory."""
-    if not os.path.exists("data"):
+    MODELS_DIR = os.getenv("MODELS_DIR", "data")
+    if not os.path.exists(MODELS_DIR):
         return []
     
     files = []
     try:
-        for f in os.listdir("data"):
-            if os.path.isfile(os.path.join("data", f)) and not f.startswith('.'):
+        for f in os.listdir(MODELS_DIR):
+            if os.path.isfile(os.path.join(MODELS_DIR, f)) and not f.startswith('.'):
                 files.append(f)
     except Exception:
         pass
@@ -441,7 +445,8 @@ async def train_model(request: TrainRequest):
     Execute python code to train a model.
     Injects 'save_model(obj)' into the local scope.
     """
-    os.makedirs("data", exist_ok=True)
+    MODELS_DIR = os.getenv("MODELS_DIR", "data")
+    os.makedirs(MODELS_DIR, exist_ok=True)
     output_buffer = io.StringIO()
     
     def save_model(obj, filename=None):
@@ -449,7 +454,7 @@ async def train_model(request: TrainRequest):
         fname = filename or request.name
         if "." not in fname:
             fname += ".pkl"
-        path = os.path.join("data", fname)
+        path = os.path.join(MODELS_DIR, fname)
         with open(path, 'wb') as f:
             pickle.dump(obj, f)
         print(f"Model saved to {path}")
@@ -494,7 +499,7 @@ async def train_model(request: TrainRequest):
 
 # --- SQL Snippets Management ---
 
-SQL_SNIPPETS_DIR = "resources/sql_snippets"
+SQL_SNIPPETS_DIR = os.getenv("SQL_SNIPPETS_DIR", "resources/sql_snippets")
 os.makedirs(SQL_SNIPPETS_DIR, exist_ok=True)
 # Ensure General category exists
 os.makedirs(os.path.join(SQL_SNIPPETS_DIR, "General"), exist_ok=True)
@@ -567,3 +572,102 @@ async def save_sql_snippet(snippet: SQLSnippetModel):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# --- Live Strategy Execution ---
+
+class LiveStrategyRequest(BaseModel):
+    strategy_name: str
+
+@app.post("/live/strategies/start")
+async def start_live_strategy(request: LiveStrategyRequest):
+    """
+    Starts a live strategy process using ksai_proc.
+    """
+    import subprocess
+    import redis
+    
+    strategy_name = request.strategy_name
+    
+    # Check if strategy exists
+    strategy_path = os.path.join(STRATEGIES_DIR, f"{strategy_name}.py")
+    if not os.path.exists(strategy_path):
+        raise HTTPException(status_code=404, detail="Strategy file not found")
+        
+    # Check if already running
+    REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+    REDIS_PORT = int(os.getenv("REDIS_PORT", 6380))
+    r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    status = r.get(f"strategy:{strategy_name}:status")
+    if status == "running":
+        return {"status": "success", "message": "Strategy already running"}
+        
+    # Construct command
+    # We use 'uv run' to ensure the environment is correct? 
+    # Or just 'python' if we assume we are in the same venv.
+    # The user is running 'uv run main.py', so 'python' usually refers to the venv python if activated,
+    # but 'uv run' is safer if we want to be sure.
+    # However, ksai_proc just runs a command.
+    
+    # Command: python -m core.live_runner --strategy {strategy_name}
+    # We need to run this from the project root.
+    
+    cmd_str = f"uv run python -m core.live_runner --strategy {strategy_name}"
+    
+    print(f"Launching strategy {strategy_name} with command: {cmd_str}")
+    
+    try:
+        # Run ksai_proc
+        # ksai_proc --name <name> -- <command>
+        # Note: Depending on ksai_proc version, '--' might be needed before command if command has flags.
+        # Based on help: ksai_proc [OPTIONS] [COMMAND]...
+        
+        full_cmd = ["ksai_proc", "--name", strategy_name, "--"] + cmd_str.split()
+        
+        subprocess.run(full_cmd, check=True)
+        
+        # Wait a bit for status to update
+        import time
+        for _ in range(5):
+            time.sleep(0.5)
+            status = r.get(f"strategy:{strategy_name}:status")
+            if status == "running":
+                return {"status": "success", "message": f"Strategy {strategy_name} started"}
+        
+        return {"status": "warning", "message": "Strategy process launched but status not yet 'running' in Redis"}
+        
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to launch process: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/live/strategies/stop")
+async def stop_live_strategy(request: LiveStrategyRequest):
+    """
+    Stops a live strategy process using ksai_proc.
+    """
+    import subprocess
+    import redis
+    
+    strategy_name = request.strategy_name
+    REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+    REDIS_PORT = int(os.getenv("REDIS_PORT", 6380))
+    r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    
+    # 1. Update Redis to stopping
+    r.set(f"strategy:{strategy_name}:status", "stopping")
+    
+    try:
+        # 2. Call ksai_proc stop
+        # ksai_proc stop --name <name>
+        cmd = ["ksai_proc", "stop", "--name", strategy_name]
+        
+        subprocess.run(cmd, check=True)
+        
+        # 3. Verify
+        # ksai_proc stop should wait? 
+        return {"status": "success", "message": f"Strategy {strategy_name} stopped"}
+        
+    except subprocess.CalledProcessError as e:
+         raise HTTPException(status_code=500, detail=f"Failed to stop process: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -44,20 +44,31 @@ if __name__ == "__main__":
     import atexit
     import signal
     import time
+    from dotenv import load_dotenv
+    
+    # Load environment variables
+    load_dotenv()
+    
+    # Environment Configurations
+    MARIMO_PORT = int(os.getenv("MARIMO_PORT", 2718))
+    REDIS_PORT = int(os.getenv("REDIS_PORT", 6380))
+    API_PORT = int(os.getenv("API_PORT", 1218))
+    API_HOST = os.getenv("API_HOST", "0.0.0.0")
+    NOTEBOOKS_DIR = os.getenv("NOTEBOOKS_DIR", "resources/notebooks")
     
     # Ensure directories exist
-    if not os.path.exists("resources/notebooks"):
-        os.makedirs("resources/notebooks", exist_ok=True)
+    if not os.path.exists(NOTEBOOKS_DIR):
+        os.makedirs(NOTEBOOKS_DIR, exist_ok=True)
         
 
     def run_marimo(retry=True):
-        print("Starting Marimo server on port 2718...")
+        print(f"Starting Marimo server on port {MARIMO_PORT}...")
         cmd = [
             "uv", "run", "marimo", "edit", 
-            "--port", "2718", 
+            "--port", str(MARIMO_PORT), 
             "--headless", 
             "--no-token",
-            "resources/notebooks"
+            NOTEBOOKS_DIR
         ]
         # Log to file for debugging
         log_file = open("marimo.log", "w+")
@@ -73,9 +84,9 @@ if __name__ == "__main__":
             
             if "address already in use" in output or "Address already in use" in output:
                 if retry:
-                    print("Port 2718 in use. Attempting to kill existing process...")
+                    print(f"Port {MARIMO_PORT} in use. Attempting to kill existing process...")
                     try:
-                        subprocess.run(["fuser", "-k", "2718/tcp"], check=False)
+                        subprocess.run(["fuser", "-k", f"{MARIMO_PORT}/tcp"], check=False)
                         time.sleep(1) # Wait for release
                         return run_marimo(retry=False)
                     except Exception as e:
@@ -90,10 +101,10 @@ if __name__ == "__main__":
         return process, log_file
 
     def run_redis(retry=True):
-        print("Starting Redis server on port 6380...")
+        print(f"Starting Redis server on port {REDIS_PORT}...")
         cmd = [
             "redis-server",
-            "--port", "6380",
+            "--port", str(REDIS_PORT),
             "--save", "",
             "--appendonly", "no"
         ]
@@ -111,9 +122,9 @@ if __name__ == "__main__":
             
             if "Address already in use" in output or "address already in use" in output:
                 if retry:
-                    print("Port 6380 in use. Attempting to kill existing process...")
+                    print(f"Port {REDIS_PORT} in use. Attempting to kill existing process...")
                     try:
-                        subprocess.run(["fuser", "-k", "6380/tcp"], check=False)
+                        subprocess.run(["fuser", "-k", f"{REDIS_PORT}/tcp"], check=False)
                         time.sleep(1) # Wait for release
                         return run_redis(retry=False)
                     except Exception as e:
@@ -161,6 +172,7 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
     
-    uvicorn.run(app, host="0.0.0.0", port=1218)
+    uvicorn.run(app, host=API_HOST, port=API_PORT)
+
 
 

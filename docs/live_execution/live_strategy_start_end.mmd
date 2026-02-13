@@ -1,0 +1,69 @@
+
+%% The process Manager is a custom utility "ksai_proc"
+%% to start a process we do
+%% ksai_proc --name <process_name> <command to launch like : uv run strategy_strategy1_2.py>
+%% to stop a process we do
+%% ksai_proc stop --name <process_name>
+
+
+sequenceDiagram
+    participant UI as Backtest UI
+    participant API as Backtest Backend
+    participant PM as Process Manager
+    participant SP as Strategy Process
+    participant Cache as Redis
+
+    note over UI,Cache: Launching a Strategy
+
+    UI->>API: Request Start Strategy(strategy_name)
+    activate API
+
+    API->>PM: startProcess(strategy_name)
+    activate PM
+
+    PM->>SP: spawn(strategy_name)
+    activate SP
+    SP-->>PM: processStarted(pid)
+
+    SP->>Cache: SET strategy:{name}:status = "running"
+    Cache-->>SP: OK
+
+    deactivate SP
+
+
+    %% Guarantee that it WILL start
+    PM-->>API: startConfirmed(pid)
+    deactivate PM
+
+    API->>Cache: GET strategy:{name}:status
+    activate Cache
+    Cache-->>API: "running"
+    deactivate Cache
+
+    API-->>UI: Strategy Running(strategy_name)
+    deactivate API
+
+
+    note over UI,Cache: Stopping a Strategy
+
+    UI->>API: Request Stop Strategy(strategy_name)
+    activate API
+    API->>Cache: SET strategy:{name}:status = "stopping"
+    Cache-->>API: OK
+
+    API->>PM: stopProcess(strategy_name)
+    activate PM
+
+    PM->>SP: terminate(strategy_name)
+    activate SP
+
+    SP-->>PM: processStopped(pid)
+    deactivate SP
+
+    PM-->>API: stopConfirmed(pid)
+    deactivate PM
+
+    API-->>UI: Strategy Stopped(strategy_name)
+    deactivate API
+
+

@@ -1,0 +1,18 @@
+sequenceDiagram
+    participant API as Backtest Backend
+    participant Cache as Redis
+    participant DB as DuckDB
+
+    activate API
+    loop Every 5 seconds
+        API->>Cache: GET all data
+        activate Cache
+        Cache-->>API: all data
+        deactivate Cache
+        API->>DB: INSERT all data
+        activate DB
+        DB-->>API: OK
+        deactivate DB
+    end
+    deactivate API
+
