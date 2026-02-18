@@ -57,6 +57,25 @@ class Context:
         
         self.execution_delay: int = execution_delay
         self.pending_orders: List[Dict[str, Any]] = [] 
+        
+        # Structure: { ticker: { metric_name: [ { 'timestamp': ts, 'value': val }, ... ] } }
+        self.custom_metrics: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+
+    def set_metric(self, ticker: str, timestamp: Any, metric_name: str, metric_value: Any) -> None:
+        """
+        Record a custom metric for a specific ticker and timestamp.
+        Used for plotting indicators or strategy-specific values in the UI.
+        """
+        if ticker not in self.custom_metrics:
+            self.custom_metrics[ticker] = {}
+        
+        if metric_name not in self.custom_metrics[ticker]:
+            self.custom_metrics[ticker][metric_name] = []
+            
+        self.custom_metrics[ticker][metric_name].append({
+            'timestamp': timestamp,
+            'value': metric_value
+        })
 
     def set_state(self, key: str, value: Any) -> None:
         self.state[key] = value

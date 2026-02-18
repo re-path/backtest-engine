@@ -25,7 +25,8 @@ app = FastAPI()
 
 # Global storage for the last backtest run
 last_backtest_results = {
-    "event_log": None
+    "event_log": None,
+    "custom_metrics": {}
 }
 
 class StrategyModel(BaseModel):
@@ -227,6 +228,7 @@ async def run_backtest_endpoint(request: BacktestRequest):
 
         # Save for later retrieval by detail tabs
         last_backtest_results["event_log"] = event_log_df
+        last_backtest_results["custom_metrics"] = engine.context.custom_metrics
 
         metrics_df = analyze_portfolio(event_log_df)
         
@@ -241,7 +243,8 @@ async def run_backtest_endpoint(request: BacktestRequest):
             "status": "success",
             "metrics": metrics_dict,
             "plot_html": plot_html, 
-            "event_log": event_log_dict
+            "event_log": event_log_dict,
+            "custom_metrics": engine.context.custom_metrics
         }
 
     except HTTPException as e:
@@ -357,9 +360,13 @@ async def run_optimization(request: OptimizationRequest):
 @app.get("/backtest/last-log")
 async def get_last_log():
     df = last_backtest_results.get("event_log")
+    custom = last_backtest_results.get("custom_metrics", {})
     if df is None:
-        return {"event_log": []}
-    return {"event_log": df.astype(str).to_dict(orient='records')}
+        return {"event_log": [], "custom_metrics": {}}
+    return {
+        "event_log": df.astype(str).to_dict(orient='records'),
+        "custom_metrics": custom
+    }
 
 @app.get("/ticker/{ticker}/ohlc")
 async def get_ticker_ohlc(ticker: str):

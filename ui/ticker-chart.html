@@ -53,6 +53,35 @@
             font-size: 1.2rem;
             color: #fabd2f;
         }
+
+        #metrics-panel {
+            background: #282828;
+            border-bottom: 1px solid #504945;
+            padding: 0.5rem 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: center;
+            font-size: 0.8rem;
+        }
+
+        .metric-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .metric-toggle:hover {
+            background: #3c3836;
+        }
+
+        .metric-toggle input {
+            cursor: pointer;
+        }
     </style>
 </head>
 
@@ -67,7 +96,11 @@
         </div>
     </div>
 
-    <div id="loading">Initialing Chart Data...</div>
+    <div id="loading">Initializing Chart Data...</div>
+    <div id="metrics-panel" style="display: none;">
+        <span class="stats" style="margin-right: 0.5rem; color: #fe8019;">Custom Metrics:</span>
+        <div id="metrics-list" style="display: flex; flex-wrap: wrap; gap: 0.8rem;"></div>
+    </div>
     <div id="chart-container"></div>
 
     <script>
@@ -160,6 +193,81 @@
                 });
 
                 chart.timeScale().fitContent();
+
+                // 4. Handle Custom Metrics
+                const customMetrics = logData.custom_metrics[ticker] || {};
+                const metricNames = Object.keys(customMetrics);
+                
+                if (metricNames.length > 0) {
+                    const metricsPanel = document.getElementById('metrics-panel');
+                    const metricsList = document.getElementById('metrics-list');
+                    metricsPanel.style.display = 'flex';
+                    
+                    const metricSeriesMap = new Map();
+                    const colors = [
+                        '#fabd2f', '#83a598', '#d3869b', '#8ec07c', '#fe8019',
+                        '#fb4934', '#b8bb26', '#458588', '#b16286', '#689d6a'
+                    ];
+
+                    metricNames.forEach((name, index) => {
+                        const color = colors[index % colors.length];
+                        const label = document.createElement('label');
+                        label.className = 'metric-toggle';
+                        label.style.color = color;
+                        
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.onchange = (e) => {
+                            if (e.target.checked) {
+                                // Add series if not exists
+                                const series = chart.addLineSeries({
+                                    color: color,
+                                    lineWidth: 2,
+                                    title: name,
+                                    priceScaleId: 'left', // Use left axis for metrics to avoid scaling issues
+                                });
+                                
+                                // Process data
+                                const data = customMetrics[name].map(item => ({
+                                    time: Math.floor(new Date(item.timestamp).getTime() / 1000),
+                                    value: parseFloat(item.value)
+                                })).sort((a, b) => a.time - b.time);
+
+                                // Lightweight charts doesn't like duplicate timestamps
+                                const uniqueData = [];
+                                data.forEach(d => {
+                                    if (uniqueData.length === 0 || uniqueData[uniqueData.length - 1].time !== d.time) {
+                                        uniqueData.push(d);
+                                    } else {
+                                        uniqueData[uniqueData.length - 1].value = d.value; // Keep latest
+                                    }
+                                });
+
+                                series.setData(uniqueData);
+                                metricSeriesMap.set(name, series);
+                            } else {
+                                // Remove series
+                                const series = metricSeriesMap.get(name);
+                                if (series) {
+                                    chart.removeSeries(series);
+                                    metricSeriesMap.delete(name);
+                                }
+                            }
+                        };
+                        
+                        label.appendChild(checkbox);
+                        label.appendChild(document.createTextNode(name));
+                        metricsList.appendChild(label);
+                    });
+
+                    // Configure left axis if metrics used
+                    chart.applyOptions({
+                        leftPriceScale: {
+                            visible: true,
+                            borderColor: '#504945',
+                        },
+                    });
+                }
 
             } catch (err) {
                 console.error(err);
