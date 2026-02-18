@@ -1,7 +1,7 @@
 const { useState, useEffect, useRef, useCallback } = React;
 
 const START_TIME_FOR_BACKTEST = '2024-01-01'
-const END_TIME_FOR_BACKTEST = '2024-03-01'
+const END_TIME_FOR_BACKTEST = '2024-02-01'
 
 const DEFAULT_STRATEGY = "";
 
@@ -609,11 +609,14 @@ const App = () => {
                                             <AnalysisRow label="Total Net Profit" value={results.metrics.total_net_profit.toFixed(2)} positive={results.metrics.total_net_profit >= 0} />
                                             <AnalysisRow label="Gross Profit" value={results.metrics.gross_profit.toFixed(2)} positive={true} />
                                             <AnalysisRow label="Gross Loss" value={results.metrics.gross_loss.toFixed(2)} positive={false} />
+                                            <AnalysisRow label="Winning Trades" value={results.metrics.num_winning} />
+                                            <AnalysisRow label="Losing Trades" value={results.metrics.num_losing} />
                                             <AnalysisRow label="Avg Trade" value={results.metrics.avg_trade_net_profit.toFixed(2)} positive={results.metrics.avg_trade_net_profit >= 0} />
                                             <AnalysisRow label="Avg Win" value={results.metrics.avg_winning_trade.toFixed(2)} positive={true} />
                                             <AnalysisRow label="Avg Loss" value={results.metrics.avg_losing_trade.toFixed(2)} positive={false} />
                                             <AnalysisRow label="Largest Win" value={results.metrics.largest_winning_trade.toFixed(2)} positive={true} />
                                             <AnalysisRow label="Largest Loss" value={results.metrics.largest_losing_trade.toFixed(2)} positive={false} />
+                                            <AnalysisRow label="Win/Loss Ratio" value={results.metrics.ratio_avg_win_loss.toFixed(2)} />
                                         </div>
                                     </div>
 
@@ -628,6 +631,9 @@ const App = () => {
                                             <AnalysisRow label="Recovery Status" value={results.metrics.recovery_status_str} />
                                             <AnalysisRow label="Max Win Streak" value={results.metrics.max_consec_winning} />
                                             <AnalysisRow label="Max Loss Streak" value={results.metrics.max_consec_losing} />
+                                            <AnalysisRow label="High Water Mark" value={results.metrics.high_water_mark.toFixed(2)} />
+                                            <AnalysisRow label="Low Water Mark" value={results.metrics.low_water_mark.toFixed(2)} />
+                                            <AnalysisRow label="Net Profit % of DD" value={`${results.metrics.net_profit_as_pct_dd.toFixed(2)}%`} />
                                             <AnalysisRow label="Daily VaR (5%)" value={`${results.metrics.daily_var_5pct.toFixed(2)}%`} />
                                         </div>
                                     </div>

@@ -142,34 +142,41 @@ def analyze_portfolio(event_log_df: pd.DataFrame) -> Optional[pd.DataFrame]:
         df['datetime'] = df['timestamp']
     
     df = df.set_index('datetime')
-    daily_balance: pd.Series = df['portfolio_balance'].resample('D').last().ffill()
-    daily_returns: pd.Series = daily_balance.pct_change().dropna()
+    # Use portfolio_equity instead of portfolio_balance for a more accurate equity curve
+    # We still resample to daily to keep metrics consistent, but we use the latest equity
+    daily_equity: pd.Series = df['portfolio_equity'].resample('D').last().ffill()
+    daily_returns: pd.Series = daily_equity.pct_change().dropna()
     
     if daily_returns.empty:
-        return None
+        # Fallback if not enough days, use the raw equity series
+        daily_equity = df['portfolio_equity']
+        daily_returns = daily_equity.pct_change().dropna()
+        if daily_returns.empty:
+            return None
 
     portfolio_variance: float = float(daily_returns.var())
     daily_std_dev: float = float(daily_returns.std())
     two_sigma: float = daily_std_dev * 2
     value_at_risk_5pct: float = float(daily_returns.quantile(0.05))
     
-    peak: pd.Series = daily_balance.cummax()
-    drawdown: pd.Series = (daily_balance - peak) / peak
+    peak: pd.Series = daily_equity.cummax()
+    drawdown: pd.Series = (daily_equity - peak) / peak
     
     max_dd_idx: pd.Timestamp = drawdown.idxmin()
     max_dd_pct: float = float(drawdown.min())
-    trough_value: float = float(daily_balance[max_dd_idx])
+    trough_value: float = float(daily_equity[max_dd_idx])
 
     peak_val_at_dd: float = float(peak[max_dd_idx])
     
-    peak_date: pd.Timestamp = daily_balance[daily_balance == peak_val_at_dd].loc[:max_dd_idx].index[-1]
+    # Correctly find the peak date BEFORE the max drawdown
+    peak_date: pd.Timestamp = daily_equity[daily_equity == peak_val_at_dd].loc[:max_dd_idx].index[-1]
     
     max_dd_value: float = peak_val_at_dd - trough_value
 
     decline_duration: pd.Timedelta = max_dd_idx - peak_date
 
-    recovery_subset: pd.Series = daily_balance.loc[max_dd_idx:]
-    recovery_date: pd.Timestamp = recovery_subset[recovery_subset >= peak_val_at_dd].index.min()
+    recovery_subset: pd.Series = daily_equity.loc[max_dd_idx:]
+    recovery_date: Optional[pd.Timestamp] = recovery_subset[recovery_subset >= peak_val_at_dd].index.min() if not recovery_subset[recovery_subset >= peak_val_at_dd].empty else None
 
     net_profit_as_pct_dd: float = (total_net_profit / abs(max_dd_value) * 100) if max_dd_value != 0 else 0.0
     

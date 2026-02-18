@@ -44,11 +44,12 @@ class PriceMath:
 StockMath = PriceMath
 
 class Context:
-    def __init__(self, initial_balance: float, slippage: float, event_log: List[Dict[str, Any]], execution_delay: int = 0, broker_fee: float = 0.0, annual_interest_rate: float = 0.0) -> None:
+    def __init__(self, initial_balance: float, slippage: float, event_log: List[Dict[str, Any]], execution_delay: int = 0, broker_fee: float = 0.0, annual_interest_rate: float = 0.0, current_prices: Dict[str, float] = None) -> None:
         self._balance: float = initial_balance
         self.slippage: float = slippage
         self.broker_fee: float = broker_fee
         self.annual_interest_rate: float = annual_interest_rate
+        self.current_prices: Dict[str, float] = current_prices if current_prices is not None else {}
         
         self._positions: Dict[str, Position] = {}
         self.event_log: List[Dict[str, Any]] = event_log
@@ -233,14 +234,33 @@ class Context:
             return self.sell(ticker, self._positions[ticker].share_units, current_price, current_time, reason)
         return 0.0
 
+    def get_market_value(self, current_prices: Dict[str, float]) -> float:
+        """
+        Calculates the total market value of all open positions.
+        """
+        total_mv = 0.0
+        for ticker, pos in self._positions.items():
+            price = current_prices.get(ticker, pos.entry_price)
+            total_mv += pos.share_units * price
+        return total_mv
+
+    def get_total_equity(self, current_prices: Dict[str, float]) -> float:
+        """
+        Calculates total equity: cash balance + market value of positions.
+        """
+        return self._balance + self.get_market_value(current_prices)
+
     def _log(self, timestamp: Any, event_type: str, ticker: str, price: float, money_change: float) -> None:
+        equity = self.get_total_equity(self.current_prices)
+        
         self.event_log.append({
             "timestamp": timestamp,
             "event_type": event_type,
             "ticker": ticker,
             "price": price,
             "money_change": money_change,
-            "portfolio_balance": self._balance
+            "portfolio_balance": self._balance,
+            "portfolio_equity": equity
         })
 
     def process_pending_orders(self, current_ticker: str, current_price: float, current_time: Any) -> None:

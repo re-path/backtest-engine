@@ -74,8 +74,8 @@ class BacktestEngineWithSource:
         self.strategy = strategy_cls(**strategy_params)
         self.event_log = []
         
-        self.context = Context(initial_money, slippage, self.event_log, execution_delay=execution_delay, broker_fee=broker_fee, annual_interest_rate=annual_interest_rate)
         self.last_known_prices = {}
+        self.context = Context(initial_money, slippage, self.event_log, execution_delay=execution_delay, broker_fee=broker_fee, annual_interest_rate=annual_interest_rate, current_prices=self.last_known_prices)
 
     def run(self):
         total_chunks = int((self.end_time - self.start_time) / self.interval)
@@ -86,7 +86,8 @@ class BacktestEngineWithSource:
             "ticker": None,
             "price": None,
             "money_change": 0.0,
-            "portfolio_balance": self.context.get_balance()
+            "portfolio_balance": self.context.get_balance(),
+            "portfolio_equity": self.context.get_balance()
         })
 
         current_time = self.start_time
@@ -100,9 +101,20 @@ class BacktestEngineWithSource:
                 for row in chunk_df.itertuples(index=False):
                     bar = row
                     price = getattr(bar, 'price', getattr(bar, 'close', None))
+                    self.last_known_prices[bar.ticker] = price # Update before processing
                     self.context.process_pending_orders(bar.ticker, price, bar.timestamp)
                     self.strategy.on_bar(self.context, bar)
-                    self.last_known_prices[bar.ticker] = price
+                
+                # HEARTBEAT: Log equity state at end of the data chunk if not already logged by a trade
+                self.event_log.append({
+                    "timestamp": next_time,
+                    "event_type": "HEARTBEAT",
+                    "ticker": None,
+                    "price": None,
+                    "money_change": 0.0,
+                    "portfolio_balance": self.context.get_balance(),
+                    "portfolio_equity": self.context.get_total_equity(self.last_known_prices)
+                })
 
             pbar.update(1)
             current_time = next_time
