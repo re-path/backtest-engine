@@ -1,13 +1,14 @@
 
 import pandas as pd
 import os
-from .duckdb_manager import DuckDBManager
-
 import glob
+from .duckdb_manager import DuckDBManager
+from .preprocessor import SQLPreprocessor
 
 class BaseDuckDBSource:
     def __init__(self):
         self.manager = DuckDBManager.get_instance()
+        self.preprocessor = SQLPreprocessor()
 
     def _get_target_globs(self, start_date, end_date):
         base_path = self.manager.get_base_path()
@@ -42,22 +43,34 @@ class BaseDuckDBSource:
         return target_globs
 
 class FloorsheetSource(BaseDuckDBSource):
-    def query(self, start_time, end_time):
-        start_date = pd.to_datetime(start_time)
-        end_date = pd.to_datetime(end_time)
-        
-        target_globs = self._get_target_globs(start_date, end_date)
-        
-        if not target_globs:
-             return pd.DataFrame()
-
-        # Raw query selecting all columns
-        # types={'trade_time': 'TIMESTAMP', 'rate': 'DOUBLE', 'symbol': 'VARCHAR', 'contract_id': 'VARCHAR'}
-        # We define contract_id as VARCHAR to stay safe, or BIGINT
+    def query(self, start_time, end_time, ticker="*"):
         try:
+            # Use preprocessor if a specific ticker is provided, otherwise fallback to CSV logic
+            if ticker != "*":
+                # Check for optimized query
+                optimized = self.preprocessor.get_optimized_query(ticker, start_time, end_time, table_type='floorsheet')
+                if optimized["type"] == "optimized":
+                    df = self.manager.execute(optimized["sql"], optimized["params"]).df()
+                    if not df.empty:
+                        # Ensure compatibility
+                        df['ticker'] = df['ticker']
+                        df['price'] = df['price']
+                    return df
+
+            # Original CSV Fallback / Multi-ticker logic
+            start_date = pd.to_datetime(start_time)
+            end_date = pd.to_datetime(end_time)
+            target_globs = self._get_target_globs(start_date, end_date)
+            
+            if not target_globs:
+                 return pd.DataFrame()
+
             query = """
                 SELECT 
-                    * 
+                    *,
+                    trade_time as timestamp,
+                    symbol as ticker,
+                    rate as price
                 FROM read_csv(?, 
                               hive_partitioning=1, 
                               union_by_name=1, 
@@ -67,17 +80,17 @@ class FloorsheetSource(BaseDuckDBSource):
                               types={'trade_time': 'TIMESTAMP', 'rate': 'DOUBLE', 'symbol': 'VARCHAR'})
                 WHERE 
                     trade_time >= ? AND trade_time < ?
-                ORDER BY trade_time ASC
             """
             
-            df = self.manager.execute(query, [target_globs, start_date, end_date]).df()
-            
-            if not df.empty:
-                # Ensure compatibility with engine expectations by aliasing
-                df['timestamp'] = pd.to_datetime(df['trade_time'])
-                df['ticker'] = df['symbol']
-                df['price'] = df['rate']
+            if ticker != "*":
+                query += " AND symbol = ?"
+                params = [target_globs, start_date, end_date, ticker]
+            else:
+                params = [target_globs, start_date, end_date]
                 
+            query += " ORDER BY trade_time ASC"
+            
+            df = self.manager.execute(query, params).df()
             return df
 
         except Exception as e:
@@ -85,57 +98,50 @@ class FloorsheetSource(BaseDuckDBSource):
             return pd.DataFrame()
 
 class OHLCVSource(BaseDuckDBSource):
-    def query(self, start_time, end_time):
-        start_date = pd.to_datetime(start_time)
-        end_date = pd.to_datetime(end_time)
-        
-        target_globs = self._get_target_globs(start_date, end_date)
-        
-        if not target_globs:
-             return pd.DataFrame()
-
-        # Aggregated Query
-        # We group by symbol and bucket(time)
-        # For this implementation, we will act as if we are providing data in the same stream format
-        # but just fewer points if it was truly OHLCV.
-        # HOWEVER, the user asked for "two sources".
-        # If the engine expects a stream of trades, OHLCV source might be for a different use case or
-        # the engine needs to handle bars.
-        # For the purpose of "Backtest Engine", usually it iterates. 
-        # If this source returns 1-minute bars, the engine iterates 1-minute steps.
-        
+    def query(self, start_time, end_time, ticker="*", interval='1 minute'):
         try:
-            # We will generate 1-minute bars for now as a default aggregation
-            query = """
+            if ticker != "*":
+                optimized = self.preprocessor.get_optimized_query(ticker, start_time, end_time, table_type='ohlcv', interval=interval)
+                if optimized["type"] == "optimized":
+                    return self.manager.execute(optimized["sql"], optimized["params"]).df()
+
+            # Original CSV Fallback
+            start_date = pd.to_datetime(start_time)
+            end_date = pd.to_datetime(end_time)
+            target_globs = self._get_target_globs(start_date, end_date)
+            
+            if not target_globs:
+                 return pd.DataFrame()
+
+            query = f"""
                 SELECT 
-                    time_bucket(INTERVAL '1 minute', trade_time) as timestamp,
+                    time_bucket(INTERVAL '{interval}', trade_time) as timestamp,
                     symbol as ticker,
                     FIRST(rate) as open,
                     MAX(rate) as high,
                     MIN(rate) as low,
                     LAST(rate) as close,
-                    SUM(quantity) as volume
+                    SUM(quantity) as volume,
+                    LAST(rate) as price
                 FROM read_csv(?, 
                               hive_partitioning=1, 
                               union_by_name=1, 
-                              filename=0,
                               header=1,
                               auto_detect=1,
-                              types={'trade_time': 'TIMESTAMP', 'rate': 'DOUBLE', 'symbol': 'VARCHAR'})
+                              types={{'trade_time': 'TIMESTAMP', 'rate': 'DOUBLE', 'symbol': 'VARCHAR'}})
                 WHERE 
                     trade_time >= ? AND trade_time < ?
-                GROUP BY timestamp, ticker
-                ORDER BY timestamp ASC
             """
             
-            df = self.manager.execute(query, [target_globs, start_date, end_date]).df()
-            
-            if not df.empty:
-                df['timestamp'] = pd.to_datetime(df['timestamp'])
-                # Price for the engine to execute on? usually 'close' or 'open' of next bar
-                # We map 'price' to 'close' for simple backtest compatibility
-                df['price'] = df['close']
+            if ticker != "*":
+                query += " AND symbol = ?"
+                params = [target_globs, start_date, end_date, ticker]
+            else:
+                params = [target_globs, start_date, end_date]
                 
+            query += " GROUP BY timestamp, ticker ORDER BY timestamp ASC"
+            
+            df = self.manager.execute(query, params).df()
             return df
 
         except Exception as e:
