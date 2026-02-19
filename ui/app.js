@@ -554,13 +554,13 @@ const App = () => {
                                                 onClick={() => setResultsSubTab('chart')}
                                                 className={`px-3 py-1 text-[10px] font-bold uppercase rounded-sm transition-colors ${resultsSubTab === 'chart' ? 'bg-[#fe8019] text-[#282828]' : 'bg-[#3c3836] text-[#a89984] hover:bg-[#504945]'}`}
                                             >
-                                                Chart
+                                                CHART
                                             </button>
                                             <button
                                                 onClick={() => setResultsSubTab('trades')}
                                                 className={`px-3 py-1 text-[10px] font-bold uppercase rounded-sm transition-colors ${resultsSubTab === 'trades' ? 'bg-[#fe8019] text-[#282828]' : 'bg-[#3c3836] text-[#a89984] hover:bg-[#504945]'}`}
                                             >
-                                                Trades
+                                                TRADES
                                             </button>
                                         </div>
                                     </div>

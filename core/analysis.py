@@ -143,13 +143,16 @@ def analyze_portfolio(event_log_df: pd.DataFrame) -> Optional[pd.DataFrame]:
     
     df = df.set_index('datetime')
     # Use portfolio_equity instead of portfolio_balance for a more accurate equity curve
+    # Fallback to portfolio_balance if equity is not available (e.g. in some older tests)
+    equity_col = 'portfolio_equity' if 'portfolio_equity' in df.columns else 'portfolio_balance'
+    
     # We still resample to daily to keep metrics consistent, but we use the latest equity
-    daily_equity: pd.Series = df['portfolio_equity'].resample('D').last().ffill()
+    daily_equity: pd.Series = df[equity_col].resample('D').last().ffill()
     daily_returns: pd.Series = daily_equity.pct_change().dropna()
     
     if daily_returns.empty:
         # Fallback if not enough days, use the raw equity series
-        daily_equity = df['portfolio_equity']
+        daily_equity = df[equity_col]
         daily_returns = daily_equity.pct_change().dropna()
         if daily_returns.empty:
             return None
@@ -233,5 +236,13 @@ def analyze_portfolio(event_log_df: pd.DataFrame) -> Optional[pd.DataFrame]:
         'recovery_date': recovery_date if pd.notna(recovery_date) else None,
         'net_profit_as_pct_dd': net_profit_as_pct_dd
     }
+
+    def clean_metric(val):
+        if isinstance(val, (float, np.float64, np.float32)):
+            if math.isnan(val) or math.isinf(val):
+                return 0.0
+        return val
+
+    metrics_data = {k: clean_metric(v) for k, v in metrics_data.items()}
 
     return pd.DataFrame([metrics_data])
