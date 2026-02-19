@@ -64,6 +64,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "duckdb" },
     { name = "fastapi" },
+    { name = "jinja2" },
     { name = "marimo", extra = ["recommended"] },
     { name = "numpy" },
     { name = "pandas" },
@@ -86,6 +87,7 @@ dev = [
 requires-dist = [
     { name = "duckdb", specifier = ">=1.4.4" },
     { name = "fastapi", specifier = ">=0.128.0" },
+    { name = "jinja2", specifier = ">=3.1.6" },
     { name = "marimo", extras = ["all", "recommended"], specifier = ">=0.19.9" },
     { name = "numpy", specifier = ">=2.4.1" },
     { name = "pandas", specifier = ">=2.3.3" },

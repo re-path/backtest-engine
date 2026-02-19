@@ -1,4 +1,4 @@
-# core/context.py
+
 import math
 import pandas as pd
 import numpy as np
@@ -58,15 +58,9 @@ class Context:
         
         self.execution_delay: int = execution_delay
         self.pending_orders: List[Dict[str, Any]] = [] 
-        
-        # Structure: { ticker: { metric_name: [ { 'timestamp': ts, 'value': val }, ... ] } }
         self.custom_metrics: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
 
     def set_metric(self, ticker: str, timestamp: Any, metric_name: str, metric_value: Any) -> None:
-        """
-        Record a custom metric for a specific ticker and timestamp.
-        Used for plotting indicators or strategy-specific values in the UI.
-        """
         if ticker not in self.custom_metrics:
             self.custom_metrics[ticker] = {}
         
@@ -85,11 +79,9 @@ class Context:
         return self.state.get(key, default)
 
     def set(self, key: str, value: Any) -> None:
-        """Alias for set_state"""
         self.set_state(key, value)
     
     def get(self, key: str, default: Any = None) -> Any:
-        """Alias for get_state"""
         return self.get_state(key, default)
     
     def get_positions(self) -> Dict[str, Position]:
@@ -118,7 +110,6 @@ class Context:
         return 0.0 
 
     def _execute_buy(self, ticker: str, money_amount: float, current_price: float, current_time: Any) -> float:
-        # Pre-calc fee to check if we have enough balance
         fee = money_amount * self.broker_fee
         total_cost = money_amount + fee
         
@@ -126,7 +117,6 @@ class Context:
             return 0.0
         
         actual_buy_price: float = current_price * (1 + self.slippage)
-        # Fee is calculated on the transaction amount (money_amount)
         fee: float = money_amount * self.broker_fee
         total_cost: float = money_amount + fee
         
@@ -163,17 +153,12 @@ class Context:
         return 0.0
 
     def buy_protected(self, ticker: str, share_count: float, current_price: float, current_time: Any) -> float:
-        """
-        Enforces buying in multiples of 10, with a minimum of 10.
-        Calculates required cash automatically.
-        """
         if share_count < 10 or share_count % 10 != 0:
             return 0.0
 
         if self.execution_delay == 0:
             return self._execute_buy_shares(ticker, share_count, current_price, current_time)
         
-        # Check if already pending for this ticker/type
         for order in self.pending_orders:
             if order['ticker'] == ticker and order['type'] == 'BUY_SHARES':
                 return 0.0
@@ -235,9 +220,6 @@ class Context:
         return 0.0
 
     def get_market_value(self, current_prices: Dict[str, float]) -> float:
-        """
-        Calculates the total market value of all open positions.
-        """
         total_mv = 0.0
         for ticker, pos in self._positions.items():
             price = current_prices.get(ticker, pos.entry_price)
@@ -245,9 +227,6 @@ class Context:
         return total_mv
 
     def get_total_equity(self, current_prices: Dict[str, float]) -> float:
-        """
-        Calculates total equity: cash balance + market value of positions.
-        """
         return self._balance + self.get_market_value(current_prices)
 
     def _log(self, timestamp: Any, event_type: str, ticker: str, price: float, money_change: float) -> None:
@@ -288,13 +267,9 @@ class Context:
         self.pending_orders = remaining_orders
 
     def load_model(self, model_name: str) -> Any:
-        """
-        Loads a trained model (or any pickled object) from the data/ directory.
-        """
         import pickle
         import os
         
-        # Security: prevent directory traversal
         model_name = os.path.basename(model_name)
         
         base_path = "data"
@@ -302,7 +277,7 @@ class Context:
             os.path.join(base_path, model_name),
             os.path.join(base_path, f"{model_name}.pkl"),
             os.path.join(base_path, f"{model_name}.joblib"),
-            os.path.join(base_path, f"{model_name}.h5"), # for Keras/LSTM if saved that way
+            os.path.join(base_path, f"{model_name}.h5"),
         ]
         
         target_path = None
@@ -312,18 +287,12 @@ class Context:
                 break
         
         if not target_path:
-            # Check if it's a directory (e.g. for some model formats)
             if os.path.isdir(os.path.join(base_path, model_name)):
-                # Just return the path, the user might know how to load it (e.g. keras.models.load_model)
                 return os.path.join(base_path, model_name)
             raise FileNotFoundError(f"Model {model_name} not found in {base_path}")
             
-        # If it's a file, try to unpickle it
         try:
             with open(target_path, 'rb') as f:
                 return pickle.load(f)
         except Exception:
-            # If pickle fails, maybe it's a different format (like joblib or h5)
-            # For now, return the path and let the strategy handle special loading if needed
             return target_path
-

@@ -1,4 +1,4 @@
-# core/engine.py
+
 import math
 import pandas as pd
 import numpy as np
@@ -44,8 +44,6 @@ def filesystem_datasource(start_time, end_time):
                     df = df.rename(columns={'Close': 'price'})
                 
                 df['timestamp'] = date
-                
-                
                 dfs.append(df)
             except Exception as e:
                 print(f"Error reading {file_path}: {e}")
@@ -54,7 +52,6 @@ def filesystem_datasource(start_time, end_time):
         return pd.DataFrame(columns=['timestamp', 'ticker', 'price'])
         
     return pd.concat(dfs, ignore_index=True)
-
 
 
 def duckdb_datasource(start_time, end_time):
@@ -101,11 +98,10 @@ class BacktestEngineWithSource:
                 for row in chunk_df.itertuples(index=False):
                     bar = row
                     price = getattr(bar, 'price', getattr(bar, 'close', None))
-                    self.last_known_prices[bar.ticker] = price # Update before processing
+                    self.last_known_prices[bar.ticker] = price 
                     self.context.process_pending_orders(bar.ticker, price, bar.timestamp)
                     self.strategy.on_bar(self.context, bar)
                 
-                # HEARTBEAT: Log equity state at end of the data chunk if not already logged by a trade
                 self.event_log.append({
                     "timestamp": next_time,
                     "event_type": "HEARTBEAT",
@@ -133,10 +129,8 @@ def backtest_streamed(
         strategy_params: Dict[str, Any] = {}
     ) -> Tuple[Any, Optional[pd.DataFrame]]:
     
-    # Local import to avoid circular dependency
     from core.analysis import analyze_portfolio
 
-    # Assuming BacktestEngineWithSource is imported or defined elsewhere
     engine: Any = BacktestEngineWithSource( 
         data_source_func=data_source_func,
         start_time=start_time,
@@ -150,7 +144,6 @@ def backtest_streamed(
     )
 
     event_log: Any = engine.run()
-    # Assuming event_log is converted to DataFrame inside analyze_portfolio or engine returns DataFrame
     analysis_results: Optional[pd.DataFrame] = analyze_portfolio(event_log)
     fig: Any = plot_simulation_trades(event_log)
     fig.show()
@@ -164,41 +157,38 @@ def plot_simulation_trades(event_log_df):
 
     df = event_log_df.copy()
     
-    # 1. Standardize Timestamps
     if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', errors='coerce')
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', errors='coerce', utc=True)
         if df['timestamp'].isna().all():
-            df['timestamp'] = pd.to_datetime(event_log_df['timestamp'], errors='coerce')
+            df['timestamp'] = pd.to_datetime(event_log_df['timestamp'], errors='coerce', utc=True)
+    else:
+        if df['timestamp'].dt.tz is None:
+             df['timestamp'] = df['timestamp'].dt.tz_localize('UTC')
 
-    # 2. Hard Numeric Conversion
     df['price'] = pd.to_numeric(df['price'], errors='coerce')
     df['portfolio_balance'] = pd.to_numeric(df['portfolio_balance'], errors='coerce')
     
-    # 3. THE FIX: Kill the zero-price garbage that creates the bottom-trails
-    # This ensures the trail only exists where the dots exist
     df = df.dropna(subset=['ticker', 'price', 'timestamp'])
-    df = df[df['price'] > 1e-8] # Filters out actual 0.0 values
+    df = df[df['price'] > 1e-8] 
     
     df = df.sort_values(by=['ticker', 'timestamp'])
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-    # 4. Generate Dynamic Color Map for Dots
     unique_events = df['event_type'].unique()
     palette = px.colors.qualitative.Alphabet + px.colors.qualitative.Dark24
     color_map = {}
     for i, event in enumerate(unique_events):
         evt_str = str(event).lower()
         if 'buy' in evt_str:
-            color_map[event] = '#00FF00' # Bright Green
+            color_map[event] = '#00FF00' 
         elif 'sell' in evt_str or 'take' in evt_str:
-            color_map[event] = '#00BFFF' # Blue
+            color_map[event] = '#00BFFF' 
         elif any(x in evt_str for x in ['stop', 'liquidate', 'exit', 'close', 'loss']):
-            color_map[event] = '#FF3333' # Red
+            color_map[event] = '#FF3333' 
         else:
             color_map[event] = palette[i % len(palette)]
 
-    # 5. Trails: Connected PER TICKER using the cleaned price
     for ticker in df['ticker'].unique():
         ticker_data = df[df['ticker'] == ticker]
         fig.add_trace(go.Scatter(
@@ -212,7 +202,6 @@ def plot_simulation_trades(event_log_df):
             connectgaps=False
         ), secondary_y=False)
 
-    # 6. Dots: Each event type gets its own color
     for event_type in unique_events:
         event_data = df[df['event_type'] == event_type]
         fig.add_trace(go.Scatter(
@@ -230,7 +219,6 @@ def plot_simulation_trades(event_log_df):
             hovertemplate="<b>" + str(event_type) + "</b><br>Tkr: %{customdata[0]}<br>Px: %{y}<br>Chg: %{customdata[1]}<extra></extra>"
         ), secondary_y=False)
 
-    # 7. Portfolio Balance (Area chart on right axis)
     balance_df = df.sort_values('timestamp').drop_duplicates('timestamp', keep='last')
     fig.add_trace(go.Scatter(
         x=balance_df['timestamp'],

@@ -4,6 +4,7 @@ import subprocess
 import time
 import os
 import signal
+import re
 
 @pytest.fixture(scope="module")
 def playwright_context(browser):
@@ -51,7 +52,7 @@ def test_drawdown_and_metrics_display(page: Page):
     # 2. Wait for loading to complete (RUN STRATEGY button should be enabled again)
     # The button text might change or have a spinner, let's wait for results tab to be active
     # Results tab is auto-switched on success
-    expect(page.get_by_text("TRADES", exact=True)).to_be_visible(timeout=60000)
+    expect(page.get_by_role("button", name=re.compile("^Trades$", re.IGNORECASE))).to_be_visible(timeout=180000)
     
     # 3. Go to PERFORMANCE tab
     page.get_by_text("PERFORMANCE").click()

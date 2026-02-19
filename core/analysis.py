@@ -1,4 +1,3 @@
-# core/analysis.py
 import math
 import pandas as pd
 import numpy as np
@@ -135,23 +134,19 @@ def analyze_portfolio(event_log_df: pd.DataFrame) -> Optional[pd.DataFrame]:
 
     if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
         try:
-            df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
+            df['datetime'] = pd.to_datetime(df['timestamp'], unit='s', utc=True)
         except:
-            df['datetime'] = pd.to_datetime(df['timestamp'])
+            df['datetime'] = pd.to_datetime(df['timestamp'], utc=True)
     else:
-        df['datetime'] = df['timestamp']
+        df['datetime'] = pd.to_datetime(df['timestamp'], utc=True) if df['timestamp'].dt.tz is not None else df['timestamp']
     
     df = df.set_index('datetime')
-    # Use portfolio_equity instead of portfolio_balance for a more accurate equity curve
-    # Fallback to portfolio_balance if equity is not available (e.g. in some older tests)
     equity_col = 'portfolio_equity' if 'portfolio_equity' in df.columns else 'portfolio_balance'
     
-    # We still resample to daily to keep metrics consistent, but we use the latest equity
     daily_equity: pd.Series = df[equity_col].resample('D').last().ffill()
     daily_returns: pd.Series = daily_equity.pct_change().dropna()
     
     if daily_returns.empty:
-        # Fallback if not enough days, use the raw equity series
         daily_equity = df[equity_col]
         daily_returns = daily_equity.pct_change().dropna()
         if daily_returns.empty:
@@ -171,7 +166,6 @@ def analyze_portfolio(event_log_df: pd.DataFrame) -> Optional[pd.DataFrame]:
 
     peak_val_at_dd: float = float(peak[max_dd_idx])
     
-    # Correctly find the peak date BEFORE the max drawdown
     peak_date: pd.Timestamp = daily_equity[daily_equity == peak_val_at_dd].loc[:max_dd_idx].index[-1]
     
     max_dd_value: float = peak_val_at_dd - trough_value
@@ -238,6 +232,8 @@ def analyze_portfolio(event_log_df: pd.DataFrame) -> Optional[pd.DataFrame]:
     }
 
     def clean_metric(val):
+        if isinstance(val, (float, np.float64, pd.Series, pd.Timestamp)):
+             if hasattr(val, 'item'): val = val.item()
         if isinstance(val, (float, np.float64, np.float32)):
             if math.isnan(val) or math.isinf(val):
                 return 0.0

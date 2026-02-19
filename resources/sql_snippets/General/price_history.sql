@@ -1,1 +1,10 @@
-SELECT time_bucket(INTERVAL '1 day', trade_time) as day, last(rate) as close_price FROM floorsheets WHERE symbol = 'NABIL' GROUP BY day ORDER BY day DESC;
+from core.datasources import query
+df = query("""
+    SELECT 
+        timestamp, 
+        close as price 
+    FROM ohlcv.all_day 
+    WHERE ticker = {{ ticker }} 
+    ORDER BY timestamp DESC
+""", ticker='NABIL')
+print(df.head())

@@ -7,35 +7,44 @@ app = marimo.App(width="full")
 @app.cell
 def _():
     import marimo as mo
+    from core.datasources import query
 
-    return (mo,)
+    return mo, query
 
 
 @app.cell
-def _(mo):
-    _df = mo.sql(
-        f"""
+def _(query):
+    df = query("""
         SELECT 
             * 
-        FROM read_csv('/home/ksai/dev/repath/floorsheet-data/data/floorsheets/symbol=ADBL/year=*/month=*/day=*/*.csv', 
-                      hive_partitioning=1, 
-                      union_by_name=1, 
-                      filename=0,
-                      header=1,
-                      auto_detect=1)
-        WHERE 
-            -- Partition pruning (Fast)
-            year = '2025' AND month = '01' AND (day = '01' OR day = '02')
-            -- Precise filter (On records)
-            AND trade_time >= '2025-01-01' AND trade_time < '2025-01-03'
-        ORDER BY trade_time ASC
-        """
-    )
+        FROM raw.floorsheet 
+        WHERE ticker = '{{ ticker }}'
+          AND timestamp >= '{{ start }}' 
+          AND timestamp < '{{ end }}'
+        ORDER BY timestamp ASC
+    """, ticker='ADBL', start='2025-01-01', end='2025-01-03')
+    return (df,)
+
+
+@app.cell
+def _(df, mo):
+    mo.md(f"""
+    ### Data Loaded: {len(df)} records
+    """)
     return
 
 
 @app.cell
-def _():
+def _(df):
+    df.head()
+    return
+
+
+@app.cell
+def _(query):
+    query("""
+    SHOW tables from 
+    """)
     return
 
 

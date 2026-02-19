@@ -1,8 +1,8 @@
+
 import sys
 import os
 import argparse
 
-# Add the project root to sys.path
 sys.path.append(os.getcwd())
 
 from core.datasources.cache_manager import ParquetCacheManager
@@ -19,7 +19,6 @@ def main():
     manager = ParquetCacheManager()
     
     if args.symbol:
-        # Get globs for specific symbol
         from core.datasources.duckdb_manager import DuckDBManager
         db_manager = DuckDBManager.get_instance()
         base_path = db_manager.get_base_path()

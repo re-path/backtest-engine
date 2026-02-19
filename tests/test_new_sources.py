@@ -81,7 +81,7 @@ class TestNewSources(unittest.TestCase):
             self.assertIn(col, df.columns, f"Should contain {col}")
             
         print(f"Contextual Rows: {len(df)}")
-        print(df[['trade_time', 'symbol', 'rate', 'prev_close']].head(2))
+        print(df[['timestamp', 'ticker', 'price', 'prev_close']].head(2))
 
 if __name__ == '__main__':
     unittest.main()

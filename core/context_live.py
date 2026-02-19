@@ -6,34 +6,24 @@ from typing import List, Dict, Any, Optional
 from core.context import Context, Position, StockMath
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
 class ContextLive(Context):
     def __init__(self, initial_balance: float, slippage: float, execution_delay: int = 0, broker_fee: float = 0.0, annual_interest_rate: float = 0.0) -> None:
-        # We don't pass event_log because we will manage it in Redis
-        # But Context expects it, so we pass an empty list which we won't use directly
         super().__init__(initial_balance, slippage, [], execution_delay, broker_fee, annual_interest_rate)
         
         REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
         REDIS_PORT = int(os.getenv("REDIS_PORT", 6380))
         self.redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
         
-        # Initialize keys
         self.KEY_BALANCE = "live:balance"
         self.KEY_POSITIONS = "live:positions"
         self.KEY_ORDERS = "live:orders"
         self.KEY_LOG = "live:log"
         self.KEY_STATE = "live:state"
         
-        # Initialize balance if not present
         if not self.redis_client.exists(self.KEY_BALANCE):
             self.redis_client.set(self.KEY_BALANCE, initial_balance)
-            
-        # We don't need local self._positions, self.event_log, self.state, self.pending_orders
-        # because we fetch them from Redis on demand or update Redis directly.
-        # However, parent methods might access them, so we should be careful.
-        # Ideally, we override all methods that access them.
 
     def get_positions(self) -> Dict[str, Position]:
         raw_positions = self.redis_client.hgetall(self.KEY_POSITIONS)
@@ -80,7 +70,6 @@ class ContextLive(Context):
         return default
 
     def _execute_buy(self, ticker: str, money_amount: float, current_price: float, current_time: Any) -> float:
-        # Pre-calc fee
         fee = money_amount * self.broker_fee
         total_cost = money_amount + fee
         
@@ -96,36 +85,23 @@ class ContextLive(Context):
         share_units = StockMath.calculate_share_units_from_money(money_invest=money_amount, entry_price=actual_buy_price)
         
         if share_units > 0 and balance >= total_cost:
-            # Update balance
             new_balance = balance - total_cost
             self.set_balance(new_balance)
             
-            # Update position
             pos_data_str = self.redis_client.hget(self.KEY_POSITIONS, ticker)
             if pos_data_str:
                 pos_data = json.loads(pos_data_str)
                 pos_data['share_units'] += share_units
-                # Should we average entry price? Context doesn't seem to do it explicitly for existing Position class, 
-                # but Position class is simple. 
-                # Original Context logic:
-                # self._positions[ticker].share_units += share_units
-                # It just updates share units, keeping original entry price? 
-                # Checking Context.py: yes, it just adds share_units. Entry price remains of the first entry? 
-                # Line 120: self._positions[ticker].share_units += share_units
-                # So we do the same.
             else:
                 pos_data = {
                     'ticker': ticker,
                     'share_units': share_units,
                     'entry_price': actual_buy_price,
-                    'time': str(current_time) # Serialize time
+                    'time': str(current_time)
                 }
             
             self.redis_client.hset(self.KEY_POSITIONS, ticker, json.dumps(pos_data))
-            
-            # Log
             self._log(current_time, "BUY", ticker, actual_buy_price, -total_cost)
-            
             return share_units
         
         return 0.0
@@ -177,11 +153,9 @@ class ContextLive(Context):
         fee = money_received * self.broker_fee
         net_money = money_received - fee
         
-        # Update balance
         balance = self.get_balance()
         self.set_balance(balance + net_money)
         
-        # Update position
         pos_data['share_units'] -= share_units_amount
         
         if pos_data['share_units'] <= 1e-9:
@@ -204,14 +178,10 @@ class ContextLive(Context):
         }
         self.redis_client.rpush(self.KEY_LOG, json.dumps(log_entry))
 
-    # Pending Orders Logic
-    # We override methods that add/check pending orders
-    
     def buy(self, ticker: str, money_amount: float, current_price: float, current_time: Any) -> float:
         if self.execution_delay == 0:
             return self._execute_buy(ticker, money_amount, current_price, current_time)
         
-        # Check if pending
         orders = self._get_pending_orders()
         for order in orders:
             if order['ticker'] == ticker and order['type'] == 'BUY':
@@ -274,22 +244,15 @@ class ContextLive(Context):
 
         remaining_orders = []
         
-        # We need to handle time comparison. 'trigger_time' is string in Redis.
-        # current_time might be datetime or pd.Timestamp.
-        # We assume isoformat string or similar.
-        
         import pandas as pd
         
         for order in orders:
             if order['ticker'] == current_ticker:
-                # Parse trigger_time
                 trigger_time = pd.Timestamp(order['trigger_time'])
                 
-                # Check delay
                 try:
                     time_diff = (current_time - trigger_time).total_seconds()
                 except:
-                    # Fallback if types mismatch heavily
                     time_diff = 0
                 
                 if time_diff >= self.execution_delay:
@@ -303,14 +266,6 @@ class ContextLive(Context):
             
             remaining_orders.append(order)
             
-        # Update Redis with remaining orders
-        # Since this modifies the whole list, we can DEL and RPUSH
-        # But race conditions? Single threaded usage assumed or we need locking.
-        # Given "live" usage, we might be the only writer to orders? 
-        # Or better functionality:
-        # We can't atomically update list like this easily without Lua or WATCH.
-        # For now, simplistic approach: delete key, push remaining.
-        
         self.redis_client.delete(self.KEY_ORDERS)
         for order in remaining_orders:
             self.redis_client.rpush(self.KEY_ORDERS, json.dumps(order))

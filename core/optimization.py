@@ -12,33 +12,24 @@ class OptimizationResult:
 
 class Optimizer:
     def __init__(self, objective_function: Callable[[Dict[str, Any]], Dict[str, float]], target_metric: str = "total_net_profit"):
-        """
-        :param objective_function: Function that takes params and returns metrics dict
-        :param target_metric: The metric key to maximize
-        """
         self.objective_function = objective_function
         self.target_metric = target_metric
         self.history: List[OptimizationResult] = []
 
     def _evaluate(self, params: Dict[str, Any]) -> OptimizationResult:
         metrics = self.objective_function(params)
-        score = metrics.get(self.target_metric, -1e18) # Use large negative number instead of -inf for JSON compatibility
+        score = metrics.get(self.target_metric, -1e18) 
         result = OptimizationResult(params=copy.deepcopy(params), metrics=metrics, score=score)
         self.history.append(result)
         return result
 
     def _get_random_neighbor(self, current_params: Dict[str, Any], ranges: Dict[str, Dict[str, float]]) -> Dict[str, Any]:
-        """Generate a neighbor by perturbing one parameter."""
         neighbor = copy.deepcopy(current_params)
-        
-        # Pick one parameter to change
         param_to_change = random.choice(list(ranges.keys()))
         config = ranges[param_to_change]
-        
         current_val = neighbor[param_to_change]
         step = config.get('step', (config['max'] - config['min']) / 20.0)
         
-        # Perturb
         if isinstance(current_val, int) or config.get('type') == 'int':
             delta = random.randint(-int(step), int(step))
             new_val = current_val + delta
@@ -46,7 +37,6 @@ class Optimizer:
             delta = random.uniform(-step, step)
             new_val = current_val + delta
             
-        # Clip to bounds
         new_val = max(config['min'], min(config['max'], new_val))
         
         if config.get('type') == 'int':
@@ -59,16 +49,13 @@ class Optimizer:
         current_params = initial_params
         current_result = self._evaluate(current_params)
         best_result = current_result
-        
         temp = initial_temp
-        # Cooling rate
         alpha = 0.95
         
         for i in range(iterations):
             neighbor_params = self._get_random_neighbor(current_params, ranges)
             neighbor_result = self._evaluate(neighbor_params)
             
-            # Acceptance probability
             if neighbor_result.score > current_result.score:
                 current_params = neighbor_params
                 current_result = neighbor_result

@@ -1,4 +1,3 @@
-# core/api.py
 
 import pandas as pd
 import numpy as np
@@ -18,12 +17,10 @@ from core.context import Context
 from core.datasources.sources import DailyOHLCSource 
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
 app = FastAPI()
 
-# Global storage for the last backtest run
 last_backtest_results = {
     "event_log": None,
     "custom_metrics": {}
@@ -45,7 +42,6 @@ async def list_strategies():
     files = glob.glob(os.path.join(STRATEGIES_DIR, "*.py"))
     for f in files:
         try:
-            # For now, just listing the filename without parsing content for metadata
             name = os.path.basename(f).replace(".py", "")
             strategies.append({
                 "name": name,
@@ -64,8 +60,6 @@ async def get_strategy(name: str):
     try:
         with open(file_path, 'r') as file:
             code = file.read()
-            # Return empty params as we are not persisting them in the file yet
-            # The client should handle this gracefully (e.g. keep existing params or default)
             return {
                 "name": name,
                 "code": code,
@@ -76,7 +70,6 @@ async def get_strategy(name: str):
 
 @app.post("/strategies")
 async def save_strategy(strategy: StrategyModel):
-    # Sanitize name
     safe_name = "".join([c for c in strategy.name if c.isalpha() or c.isdigit() or c in (' ', '_', '-')]).rstrip()
     if not safe_name:
         raise HTTPException(status_code=400, detail="Invalid strategy name")
@@ -88,11 +81,7 @@ async def save_strategy(strategy: StrategyModel):
             file.write(strategy.code)
         return {"status": "success", "message": f"Saved {safe_name}"}
     except Exception as e:
-        # traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
-
-
 
 
 NOTEBOOKS_DIR = os.getenv("NOTEBOOKS_DIR", "resources/notebooks")
@@ -127,7 +116,6 @@ async def create_notebook(notebook: NotebookModel):
     if os.path.exists(file_path):
         raise HTTPException(status_code=400, detail="Notebook already exists")
     
-    # Minimal Marimo Template
     template = '''import marimo
 
 __generated_with = "0.10.9"
@@ -171,7 +159,7 @@ class SimpleTestStrategy:
             return
 
         if bar.price > last_price:
-            invest_amount = context.get_balance() * 0.10 # Invest 10%
+            invest_amount = context.get_balance() * 0.10
             context.buy(bar.ticker, invest_amount, bar.price, bar.timestamp)
         elif bar.price < last_price:
             context.close(bar.ticker, bar.price, bar.timestamp, "TrendRev")
@@ -182,23 +170,18 @@ class SimpleTestStrategy:
 async def run_backtest_endpoint(request: BacktestRequest):
     try:
         start_dt = pd.to_datetime(request.start_date)
-        end_dt = pd.to_datetime(request.end_date) # Fixed: was requesting request.end_date twice in original potentially or just logic flow
+        end_dt = pd.to_datetime(request.end_date)
 
         strategy_cls = SimpleTestStrategy
         
-        # Dynamic Strategy Execution
         if request.code:
             try:
-                # Define a local scope for execution
                 local_scope = {}
-                # Execute the code
                 exec(request.code, globals(), local_scope)
                 
-                # Look for a class named 'Strategy' inside the executed code
                 if 'Strategy' in local_scope:
                     strategy_cls = local_scope['Strategy']
                 else:
-                    # Fallback: try to find the first class defined
                     import inspect
                     classes = [obj for name, obj in local_scope.items() if inspect.isclass(obj)]
                     if classes:
@@ -226,7 +209,6 @@ async def run_backtest_endpoint(request: BacktestRequest):
         event_log_df = engine.run()
         print(f">>> Engine finished. Log size: {len(event_log_df)} rows")
 
-        # Save for later retrieval by detail tabs
         last_backtest_results["event_log"] = event_log_df
         last_backtest_results["custom_metrics"] = engine.context.custom_metrics
 
@@ -253,14 +235,14 @@ async def run_backtest_endpoint(request: BacktestRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
 from core.optimization import Optimizer, OptimizationResult
 
 class OptimizationRequest(BaseModel):
     code: str
-    ranges: Dict[str, Dict[str, float]] # param -> {min, max, step}
-    algorithm: str # "annealing" or "hill_climb"
+    ranges: Dict[str, Dict[str, float]]
+    algorithm: str
     target_metric: str = "total_net_profit"
-    # Backtest params
     start_date: str
     end_date: str
     initial_balance: float = float(os.getenv("INITIAL_BALANCE", 10000.0))
@@ -272,11 +254,9 @@ class OptimizationRequest(BaseModel):
 @app.post("/optimize")
 async def run_optimization(request: OptimizationRequest):
     try:
-        # 1. Parse dates and compile strategy once if possible
         start_dt = pd.to_datetime(request.start_date)
         end_dt = pd.to_datetime(request.end_date)
         
-        # Strategy Compilation Logic (Reused)
         strategy_cls = None
         if request.code:
             try:
@@ -296,9 +276,7 @@ async def run_optimization(request: OptimizationRequest):
         else:
              strategy_cls = SimpleTestStrategy
 
-        # 2. Define Objective Function
         def objective_function(params: Dict[str, Any]) -> Dict[str, float]:
-            # Merge optimized params with base params
             full_params = {**request.base_params, **params}
             
             engine = BacktestEngineWithSource(
@@ -324,20 +302,17 @@ async def run_optimization(request: OptimizationRequest):
             except Exception:
                 return {}
 
-        # 3. Initialize Optimizer
         optimizer = Optimizer(objective_function, target_metric=request.target_metric)
         
-        # 4. Run Algorithm
         initial_params = {}
         for param, config in request.ranges.items():
-            # Start at midpoint
             initial_params[param] = (config['min'] + config['max']) / 2
             if config.get('type') == 'int':
                 initial_params[param] = int(initial_params[param])
 
         results = []
         if request.algorithm == "annealing":
-            results = optimizer.simulated_annealing(initial_params, request.ranges, iterations=20) # 20 iterations for responsiveness
+            results = optimizer.simulated_annealing(initial_params, request.ranges, iterations=20)
         elif request.algorithm == "hill_climb":
             results = optimizer.hill_climbing(initial_params, request.ranges, iterations=20)
         
@@ -357,6 +332,7 @@ async def run_optimization(request: OptimizationRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/backtest/last-log")
 async def get_last_log():
     df = last_backtest_results.get("event_log")
@@ -370,33 +346,11 @@ async def get_last_log():
 
 @app.get("/ticker/{ticker}/ohlc")
 async def get_ticker_ohlc(ticker: str):
-    """
-    Fetch OHLC data for a specific ticker across a broad date range from DuckDB.
-    """
     try:
-        # Use a wide range to capture all history
         start_time = "2010-01-01" 
         end_time = datetime.now().strftime("%Y-%m-%d")
         
         ds = DailyOHLCSource()
-        # DailyOHLCSource returns a DataFrame with: timestamp, ticker, open, high, low, close, volume (and others per query)
-        # We need to filter for the specific ticker because DailyOHLCSource queries ALL matching globs
-        # But wait, DailyOHLCSource.query takes target_globs which are constructed from date range.
-        # It queries *everything* in that range.
-        # DuckDB filtered query is more efficient.
-        # However, BaseDuckDBSource constructs globs based on date.
-        # And the query groups by ticker.
-        # So it returns ALL tickers. That's inefficient if we just want one.
-        # But the current implementation of BaseDuckDBSource doesn't support filtering by ticker in _get_target_globs (it uses symbol=*).
-        # We can filter in the SQL query!
-        # But DailyOHLCSource.query doesn't take a ticker argument.
-        # We should use the returned DF and filter it. The DF might be huge.
-        
-        # Let's instantiate and call a custom query method? Or filter after?
-        # A better approach is to modify DailyOHLCSource to accept a ticker filter or add a method.
-        # But for now, let's filter the DF. If it's too slow, we'll optimizing sources.py.
-        # Actually, get_ticker_ohlc is often called for a specific view.
-        # Let's see if we can optimize later. For now, filter the DF.
         
         df = ds.query(start_time, end_time)
         
@@ -408,7 +362,6 @@ async def get_ticker_ohlc(ticker: str):
         if ticker_df.empty:
             return []
             
-        # Format for frontend
         all_data = []
         for row in ticker_df.itertuples():
             all_data.append({
@@ -425,7 +378,6 @@ async def get_ticker_ohlc(ticker: str):
         print(f"Error in get_ticker_ohlc: {e}")
         return []
 
-# --- ML Model Management ---
 
 class TrainRequest(BaseModel):
     name: str
@@ -450,10 +402,6 @@ async def list_models():
 
 @app.post("/train")
 async def train_model(request: TrainRequest):
-    """
-    Execute python code to train a model.
-    Injects 'save_model(obj)' into the local scope.
-    """
     MODELS_DIR = os.getenv("MODELS_DIR", "data")
     os.makedirs(MODELS_DIR, exist_ok=True)
     output_buffer = io.StringIO()
@@ -468,7 +416,6 @@ async def train_model(request: TrainRequest):
             pickle.dump(obj, f)
         print(f"Model saved to {path}")
 
-    # Fetch data if dates provided
     training_data = pd.DataFrame()
     if request.start_date and request.end_date:
         try:
@@ -478,7 +425,6 @@ async def train_model(request: TrainRequest):
         except Exception as e:
             print(f">>> Error fetching data: {e}")
 
-    # Inject useful globals
     local_scope = {
         "save_model": save_model,
         "pd": pd,
@@ -489,7 +435,6 @@ async def train_model(request: TrainRequest):
     try:
         with redirect_stdout(output_buffer):
             print(f">>> ML Studio: Starting training for '{request.name}'...")
-            # Execute the training code
             exec(request.code, globals(), local_scope)
             print(">>> Training session completed.")
             
@@ -506,11 +451,9 @@ async def train_model(request: TrainRequest):
             "output": output_buffer.getvalue()
         }
 
-# --- SQL Snippets Management ---
 
 SQL_SNIPPETS_DIR = os.getenv("SQL_SNIPPETS_DIR", "resources/sql_snippets")
 os.makedirs(SQL_SNIPPETS_DIR, exist_ok=True)
-# Ensure General category exists
 os.makedirs(os.path.join(SQL_SNIPPETS_DIR, "General"), exist_ok=True)
 
 class SQLSnippetModel(BaseModel):
@@ -520,16 +463,8 @@ class SQLSnippetModel(BaseModel):
 
 @app.get("/sql-snippets")
 async def list_sql_snippets():
-    """
-    Returns a dictionary of categories to list of snippets.
-    {
-        "General": [ { "name": "all_trades", "code": "SELECT * ...", "path": "General/all_trades.sql" } ],
-        "Other": ...
-    }
-    """
     snippets = {}
     
-    # Walk through the directory
     for root, dirs, files in os.walk(SQL_SNIPPETS_DIR):
         category = os.path.relpath(root, SQL_SNIPPETS_DIR)
         if category == ".":
@@ -554,7 +489,6 @@ async def list_sql_snippets():
                     continue
         
         if snippet_list:
-            # Sort by date
             snippet_list.sort(key=lambda x: x['date'], reverse=True)
             snippets[category] = snippet_list
             
@@ -562,7 +496,6 @@ async def list_sql_snippets():
 
 @app.post("/sql-snippets")
 async def save_sql_snippet(snippet: SQLSnippetModel):
-    # Sanitize inputs
     safe_cat = "".join([c for c in snippet.category if c.isalpha() or c.isdigit() or c in (' ', '_', '-')]).strip() or "General"
     safe_name = "".join([c for c in snippet.name if c.isalpha() or c.isdigit() or c in (' ', '_', '-')]).strip()
     
@@ -582,16 +515,11 @@ async def save_sql_snippet(snippet: SQLSnippetModel):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- Live Strategy Execution ---
-
 class LiveStrategyRequest(BaseModel):
     strategy_name: str
 
 @app.get("/live/strategies")
 async def list_live_strategies():
-    """
-    Lists all strategies and their current Redis status.
-    """
     import redis
     
     REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
@@ -613,20 +541,15 @@ async def list_live_strategies():
 
 @app.post("/live/strategies/start")
 async def start_live_strategy(request: LiveStrategyRequest):
-    """
-    Starts a live strategy process using ksai_proc.
-    """
     import subprocess
     import redis
     
     strategy_name = request.strategy_name
     
-    # Check if strategy exists
     strategy_path = os.path.join(STRATEGIES_DIR, f"{strategy_name}.py")
     if not os.path.exists(strategy_path):
         raise HTTPException(status_code=404, detail="Strategy file not found")
         
-    # Check if already running
     REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
     REDIS_PORT = int(os.getenv("REDIS_PORT", 6380))
     r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
@@ -634,31 +557,15 @@ async def start_live_strategy(request: LiveStrategyRequest):
     if status == "running":
         return {"status": "success", "message": "Strategy already running"}
         
-    # Construct command
-    # We use 'uv run' to ensure the environment is correct? 
-    # Or just 'python' if we assume we are in the same venv.
-    # The user is running 'uv run main.py', so 'python' usually refers to the venv python if activated,
-    # but 'uv run' is safer if we want to be sure.
-    # However, ksai_proc just runs a command.
-    
-    # Command: python -m core.live_runner --strategy {strategy_name}
-    # We need to run this from the project root.
-    
     cmd_str = f"uv run python -m core.live_runner --strategy {strategy_name}"
     
     print(f"Launching strategy {strategy_name} with command: {cmd_str}")
     
     try:
-        # Run ksai_proc
-        # ksai_proc --name <name> -- <command>
-        # Note: Depending on ksai_proc version, '--' might be needed before command if command has flags.
-        # Based on help: ksai_proc [OPTIONS] [COMMAND]...
-        
         full_cmd = ["ksai_proc", "--name", strategy_name, "--"] + cmd_str.split()
         
         subprocess.run(full_cmd, check=True)
         
-        # Wait a bit for status to update
         import time
         for _ in range(5):
             time.sleep(0.5)
@@ -675,9 +582,6 @@ async def start_live_strategy(request: LiveStrategyRequest):
 
 @app.post("/live/strategies/stop")
 async def stop_live_strategy(request: LiveStrategyRequest):
-    """
-    Stops a live strategy process using ksai_proc.
-    """
     import subprocess
     import redis
     
@@ -686,15 +590,12 @@ async def stop_live_strategy(request: LiveStrategyRequest):
     REDIS_PORT = int(os.getenv("REDIS_PORT", 6380))
     r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
     
-    # 1. Update Redis to stopping
     r.set(f"strategy:{strategy_name}:status", "stopping")
     
     try:
-        # 2. Call ksai_proc stop
         cmd = ["ksai_proc", "stop", "--name", strategy_name]
         subprocess.run(cmd, check=True)
         
-        # 3. Force update Redis to stopped
         r.set(f"strategy:{strategy_name}:status", "stopped")
         
         return {"status": "success", "message": f"Strategy {strategy_name} stopped"}

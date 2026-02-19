@@ -186,7 +186,6 @@ class GeminiLLM:
 
         return {
             "mime_type": mime_type,
-            # "data" : image_bytes
             "data": base64.b64encode(image_bytes).decode("utf-8"),
         }
 

@@ -74,7 +74,12 @@ if __name__ == "__main__":
         # Log to file in data/ for debugging
         log_path = os.path.join(DATA_DIR, "marimo.log")
         log_file = open(log_path, "w+")
-        process = subprocess.Popen(cmd, stdout=log_file, stderr=log_file)
+        
+        # Inject current directory into PYTHONPATH so notebooks can import 'core'
+        env = os.environ.copy()
+        env["PYTHONPATH"] = os.getcwd() + (":" + env.get("PYTHONPATH", "") if env.get("PYTHONPATH") else "")
+        
+        process = subprocess.Popen(cmd, stdout=log_file, stderr=log_file, env=env)
         
         # Check if it failed immediately
         time.sleep(2)
