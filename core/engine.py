@@ -17,6 +17,7 @@ import duckdb
 from dotenv import load_dotenv
 from core.context import Context
 from core.datasources.sources import FloorsheetSource, DailyCloseSource
+from core.datasources import query
 
 load_dotenv()
 
@@ -55,8 +56,8 @@ def filesystem_datasource(start_time, end_time):
 
 
 def duckdb_datasource(start_time, end_time):
-    ds = DailyCloseSource()
-    return ds.query(start_time, end_time)
+    sql = "SELECT timestamp, ticker, close as price FROM ohlcv.ohlcv_1d WHERE timestamp >= ? AND timestamp < ?"
+    return query(sql, _params=[pd.to_datetime(start_time), pd.to_datetime(end_time)]).to_pandas()
 
 class BacktestEngineWithSource:
     def __init__(self, data_source_func, start_time, end_time, interval, strategy_cls, initial_money=100, slippage=0.20, broker_fee=0.0, annual_interest_rate=0.0, execution_delay=0, strategy_params=None):

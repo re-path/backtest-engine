@@ -3,7 +3,7 @@ df = query("""
     SELECT 
         timestamp, 
         close as price 
-    FROM ohlcv.all_day 
+    FROM ohlcv.ohlcv_1d 
     WHERE ticker = {{ ticker }} 
     ORDER BY timestamp DESC
 """, ticker='NABIL')

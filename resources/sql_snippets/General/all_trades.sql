@@ -1,7 +1,7 @@
 from core.datasources import query
 df = query("""
     SELECT * 
-    FROM raw.floorsheet 
+    FROM floorsheet 
     WHERE ticker = {{ ticker }} 
     ORDER BY timestamp DESC 
     LIMIT 100

@@ -90,6 +90,10 @@ os.makedirs(NOTEBOOKS_DIR, exist_ok=True)
 class NotebookModel(BaseModel):
     name: str
 
+class RenameNotebookModel(BaseModel):
+    old_name: str
+    new_name: str
+
 @app.get("/notebooks")
 async def list_notebooks():
     notebooks = []
@@ -133,6 +137,29 @@ if __name__ == "__main__":
         with open(file_path, 'w') as file:
             file.write(template)
         return {"status": "success", "message": f"Created {safe_name}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/notebooks/rename")
+async def rename_notebook(notebook: RenameNotebookModel):
+    old_safe = "".join([c for c in notebook.old_name if c.isalpha() or c.isdigit() or c in (' ', '_', '-')]).rstrip()
+    new_safe = "".join([c for c in notebook.new_name if c.isalpha() or c.isdigit() or c in (' ', '_', '-')]).rstrip()
+    
+    if not old_safe or not new_safe:
+        raise HTTPException(status_code=400, detail="Invalid notebook name")
+        
+    old_path = os.path.join(NOTEBOOKS_DIR, f"{old_safe}.py")
+    new_path = os.path.join(NOTEBOOKS_DIR, f"{new_safe}.py")
+    
+    if not os.path.exists(old_path):
+        raise HTTPException(status_code=404, detail="Notebook not found")
+        
+    if os.path.exists(new_path):
+        raise HTTPException(status_code=400, detail="Target name already exists")
+    
+    try:
+        os.rename(old_path, new_path)
+        return {"status": "success", "message": f"Renamed {old_safe} to {new_safe}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -38,11 +38,29 @@ const ManualAnalysisPanel = () => {
         }
     };
 
+    const renameNotebook = async (e, oldName) => {
+        e.stopPropagation();
+        const newName = prompt("Enter new name for the notebook:", oldName);
+        if (!newName || newName === oldName) return;
+
+        try {
+            const res = await fetch('/notebooks/rename', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ old_name: oldName, new_name: newName })
+            });
+            if (res.ok) {
+                fetchNotebooks();
+            } else {
+                const err = await res.json();
+                alert(err.detail || "Failed to rename notebook");
+            }
+        } catch (e) {
+            alert(e.message);
+        }
+    };
+
     const openNotebook = (name) => {
-        // Construct URL to open simple edit mode for the specific file
-        // Marimo URL format: http://host:port/?file=path/to/file.py
-        // We serve resources/notebooks at root of marimo
-        // So file path is just name.py
         const url = `http://${window.location.hostname}:2718/?file=${name}.py`;
         window.open(url, '_blank');
     };
@@ -77,14 +95,22 @@ const ManualAnalysisPanel = () => {
                         <div
                             key={nb.name}
                             onClick={() => openNotebook(nb.name)}
-                            className="bg-[#282828] border border-[#504945] p-4 rounded cursor-pointer hover:border-[#fe8019] transition-all group"
+                            className="bg-[#282828] border border-[#504945] p-4 rounded cursor-pointer hover:border-[#fe8019] transition-all group relative"
                         >
                             <div className="flex justify-between items-start mb-2">
                                 <div className="font-bold text-lg text-[#ebdbb2] group-hover:text-[#fe8019]">{nb.name}</div>
                                 <span className="text-xs text-[#a89984]">{new Date(nb.date).toLocaleDateString()}</span>
                             </div>
-                            <div className="text-sm text-[#a89984]">
-                                Python Notebook
+                            <div className="flex justify-between items-center">
+                                <div className="text-sm text-[#a89984]">
+                                    Python Notebook
+                                </div>
+                                <button
+                                    onClick={(e) => renameNotebook(e, nb.name)}
+                                    className="text-xs bg-[#504945] px-2 py-1 rounded hover:bg-[#665c54] text-[#ebdbb2] opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    RENAME
+                                </button>
                             </div>
                         </div>
                     ))}

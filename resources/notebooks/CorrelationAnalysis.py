@@ -9,34 +9,19 @@ def _():
     import marimo as mo
     from core.datasources import query
 
-    return mo, query
+    return (query,)
 
 
 @app.cell
 def _(query):
-    df = query("""
-        SELECT 
-            * 
-        FROM raw.floorsheet 
-        WHERE ticker = '{{ ticker }}'
-          AND timestamp >= '{{ start }}' 
-          AND timestamp < '{{ end }}'
-        ORDER BY timestamp ASC
-    """, ticker='ADBL', start='2025-01-01', end='2025-01-03')
-    return (df,)
-
-
-@app.cell
-def _(df, mo):
-    mo.md(f"""
-    ### Data Loaded: {len(df)} records
-    """)
+    # No need to manually attach anymore, query() handles it
+    # query("SELECT * FROM floorsheet LIMIT 5")
     return
 
 
 @app.cell
-def _(df):
-    df.head()
+def _(query):
+    query("""SELECT distinct symbol FROM raw.floorsheet""")
     return
 
 
