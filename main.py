@@ -51,7 +51,9 @@ if __name__ == "__main__":
     
     # Environment Configurations
     MARIMO_PORT = int(os.getenv("MARIMO_PORT", 2718))
+    MARIMO_HOST = os.getenv("MARIMO_HOST", "0.0.0.0")
     REDIS_PORT = int(os.getenv("REDIS_PORT", 6380))
+    REDIS_HOST = os.getenv("REDIS_HOST", "0.0.0.0")
     API_PORT = int(os.getenv("API_PORT", 1218))
     API_HOST = os.getenv("API_HOST", "0.0.0.0")
     NOTEBOOKS_DIR = os.getenv("NOTEBOOKS_DIR", "resources/notebooks")
@@ -67,6 +69,7 @@ if __name__ == "__main__":
         cmd = [
             "uv", "run", "marimo", "edit", 
             "--port", str(MARIMO_PORT), 
+            "--host", MARIMO_HOST,
             "--headless", 
             "--no-token",
             NOTEBOOKS_DIR
@@ -114,6 +117,7 @@ if __name__ == "__main__":
         cmd = [
             "redis-server",
             "--port", str(REDIS_PORT),
+            "--bind", REDIS_HOST,
             "--dir", abs_data_dir,
             "--save", "60 1", # Basic persistence to data/
             "--appendonly", "no"

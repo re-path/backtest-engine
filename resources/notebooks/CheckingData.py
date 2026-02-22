@@ -8,6 +8,7 @@ app = marimo.App(width="full")
 def _():
     import marimo as mo
     from core.datasources import query
+    import plotly.express as px
 
     return mo, query
 
@@ -96,8 +97,8 @@ def _(mo):
 
 
 @app.cell
-def _(query, stock):
-    query(f"""
+def _(mo, query, stock):
+    _df = query(f"""
     WITH d1 AS (
         SELECT symbol,
             trade_time,
@@ -109,12 +110,37 @@ def _(query, stock):
             seller_broker FROM raw.floorsheet 
         WHERE symbol = '{stock.value}'
         ORDER BY trade_time
+    ),
+
+    d2 AS (
+        SELECT *,
+            ((rate - lag(rate, 1) OVER (ORDER BY trade_time)) / rate) AS change,
+            epoch_us(trade_time - lag(trade_time, 1) OVER (ORDER BY trade_time)) AS diff_us FROM d1
+        WHERE date_trunc('d', trade_time) < date_trunc('d', (SELECT min(trade_time) FROM d1)) + INTERVAL 3 DAY
+    ),
+
+    d3 AS (
+        SELECT SUM(
+           CASE WHEN quantity % 10 != 0 AND quantity < 10
+           THEN amount
+           ELSE 0
+           END
+        )  AS sum_odd,
+        SUM(amount) AS total_sum
+        FROM d2 
     )
 
-    SELECT * FROM d1
-    WHERE date_trunc('d', trade_time) < date_trunc('d', (SELECT min(trade_time) FROM d1)) + INTERVAL 1 DAY
+     SELECT *, sum_odd/total_sum FROM d3
+    -- SELECT * FROM d1
 
     """)
+
+    # _pdf = _df.to_pandas()
+    # _fig = px.scatter(_pdf, x="trade_time", y="diff_us",
+    #                  title="Scatter of diff over trade_time", opacity=0.3,
+    #                  labels={"trade_time": "Trade Time", "diff": "Diff"})
+    mo.output.append(_df)
+    # _fig.show()
     return
 
 

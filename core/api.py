@@ -549,7 +549,7 @@ class LiveStrategyRequest(BaseModel):
 async def list_live_strategies():
     import redis
     
-    REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+    REDIS_HOST = os.getenv("REDIS_HOST", "0.0.0.0")
     REDIS_PORT = int(os.getenv("REDIS_PORT", 6380))
     r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
     
@@ -577,7 +577,7 @@ async def start_live_strategy(request: LiveStrategyRequest):
     if not os.path.exists(strategy_path):
         raise HTTPException(status_code=404, detail="Strategy file not found")
         
-    REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+    REDIS_HOST = os.getenv("REDIS_HOST", "0.0.0.0")
     REDIS_PORT = int(os.getenv("REDIS_PORT", 6380))
     r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
     status = r.get(f"strategy:{strategy_name}:status")
@@ -613,7 +613,7 @@ async def stop_live_strategy(request: LiveStrategyRequest):
     import redis
     
     strategy_name = request.strategy_name
-    REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+    REDIS_HOST = os.getenv("REDIS_HOST", "0.0.0.0")
     REDIS_PORT = int(os.getenv("REDIS_PORT", 6380))
     r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
     

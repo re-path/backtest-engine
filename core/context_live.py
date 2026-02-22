@@ -12,7 +12,7 @@ class ContextLive(Context):
     def __init__(self, initial_balance: float, slippage: float, execution_delay: int = 0, broker_fee: float = 0.0, annual_interest_rate: float = 0.0) -> None:
         super().__init__(initial_balance, slippage, [], execution_delay, broker_fee, annual_interest_rate)
         
-        REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+        REDIS_HOST = os.getenv("REDIS_HOST", "0.0.0.0")
         REDIS_PORT = int(os.getenv("REDIS_PORT", 6380))
         self.redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
         

@@ -72,7 +72,8 @@ class ParquetCacheManager:
                     CAST(amount AS DOUBLE) AS amount,
                     buyer_broker,
                     seller_broker,
-                    CAST(trade_time AS TIMESTAMP) AS trade_time,
+                    -- CAST(trade_time AS TIMESTAMP) AS trade_time,
+                    (CAST(trade_time AS TIMESTAMPTZ) AT TIME ZONE 'UTC')::TIMESTAMP AS trade_time,
                     source
                 FROM read_csv_auto('{csv_path}')
                 ORDER BY CAST(trade_time AS TIMESTAMP)

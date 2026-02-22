@@ -39,7 +39,7 @@ def load_strategy_class(strategy_name):
 class LiveRunner:
     def __init__(self, strategy_name: str, redis_host=None, redis_port=None):
         self.strategy_name = strategy_name
-        host = redis_host or os.getenv("REDIS_HOST", "localhost")
+        host = redis_host or os.getenv("REDIS_HOST", "0.0.0.0")
         port = int(redis_port or os.getenv("REDIS_PORT", 6380))
         self.redis = redis.Redis(host=host, port=port, decode_responses=True)
         self.running = True
