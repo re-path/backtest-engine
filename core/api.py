@@ -177,21 +177,28 @@ class BacktestRequest(BaseModel):
 class SimpleTestStrategy:
     def __init__(self, **kwargs):
         self.params = kwargs
+        self.ema_period = kwargs.get('ema_period', 20)
+        self.k = 2 / (self.ema_period + 1)
 
     def on_bar(self, context, bar):
-        last_price = context.get_state('last_price', 0)
+        # 1. Maintain EMA state per ticker
+        emas = context.get_state('emas', {})
+        prev_ema = emas.get(bar.ticker, bar.price)
         
-        if last_price == 0:
-            context.set_state('last_price', bar.price)
-            return
+        # Calculate new EMA
+        current_ema = (bar.price * self.k) + (prev_ema * (1 - self.k))
+        emas[bar.ticker] = current_ema
+        context.set_state('emas', emas)
 
-        if bar.price > last_price:
-            invest_amount = context.get_balance() * 0.10
-            context.buy(bar.ticker, invest_amount, bar.price, bar.timestamp)
-        elif bar.price < last_price:
-            context.close(bar.ticker, bar.price, bar.timestamp, "TrendRev")
-        
-        context.set_state('last_price', bar.price)
+        # 2. Log custom metric for the chart
+        context.set_metric("EMA_Example", bar.timestamp, bar.ticker, current_ema)
+
+        # 3. Simple Mean Reversion Logic
+        if bar.price > current_ema * 1.05: # 5% above EMA
+             context.close(bar.ticker, bar.price, bar.timestamp, "MeanRev_Sell")
+        elif bar.price < current_ema * 0.95: # 5% below EMA
+             invest_amount = context.get_balance() * 0.20
+             context.buy(bar.ticker, invest_amount, bar.price, bar.timestamp)
 
 @app.post("/run-backtest")
 async def run_backtest_endpoint(request: BacktestRequest):
@@ -222,7 +229,7 @@ async def run_backtest_endpoint(request: BacktestRequest):
             data_source_func=duckdb_datasource,
             start_time=start_dt,
             end_time=end_dt,
-            interval=pd.Timedelta(days=30), 
+            interval=pd.Timedelta(days=1), 
             strategy_cls=strategy_cls, 
             initial_money=request.initial_balance,
             slippage=request.slippage,

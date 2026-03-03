@@ -2,59 +2,39 @@ class Strategy:
     def __init__(self, **kwargs):
         # Strategy parameters are passed to __init__
         self.params = kwargs
+        self.ema_period = kwargs.get('ema_period', 20)
+        self.k = 2 / (self.ema_period + 1)
 
     def on_bar(self, context, bar):
         """
-        Main Strategy Logic
-        
-        API Documentation:
-        ------------------
-        Accessing Data:
-          bar.price       (float) : Current close price of the asset
-          bar.timestamp   (params): Current timestamp (pandas Timestamp)
-          bar.ticker      (str)   : Ticker symbol
-          
-        Context (State & Actions):
-          context.get_balance()           : Current available cash (Affected by fees & interest)
-          context.get_positions()         : Dictionary of active positions {ticker: Position}
-          
-          # NOTE: Broker fees and Interest rates are configured in the right panel
-          # and applied automatically by the engine.
-          
-          # STATE MANAGEMENT (CRITICAL):
-          # Do NOT use self.variable = x. Use context.get/set instead.
-          context.set(key, value)         : Store a value
-          context.get(key, default=None)  : Retrieve a value, returns default if not found
-          
-          # TRADING ACTIONS:
-          context.buy(ticker, money_amount, price, time)
-          context.buy_protected(ticker, share_count, price, time) # Shares (10, 20, 30...)
-          context.sell(ticker, share_fraction, price, time, reason="SELL")
-          context.close(ticker, price, time, reason="CLOSE") # Close entire position
-          
+        Main Strategy Logic with EMA Example
         """
         
-        # Example 1: Use context.get() to manage state
-        # Let's count how many bars we've seen for this ticker
-        ticker_count_key = f"{bar.ticker}_count"
-        current_count = context.get(ticker_count_key, 0)
-        context.set(ticker_count_key, current_count + 1)
+        # 1. EMA Calculation Example
+        # Use context.get() / context.set() to maintain indicator state across bars
+        emas = context.get('emas', {})
+        prev_ema = emas.get(bar.ticker, bar.price)
         
-        # Example 2: Accessing Parameters
-        buy_probability = self.params.get('buy_prob', 0.10) 
+        # Calculate new EMA for this bar
+        current_ema = (bar.price * self.k) + (prev_ema * (1 - self.k))
         
-        # Example 3: Trading Logic (Protected)
-        # buy_protected requires share counts in multiples of 10
-        import random
-        if random.random() < buy_probability:
-             # Buy 10 shares if we have enough balance
-             # This automatically calculates and deducts the cash required.
-             context.buy_protected(bar.ticker, 10, bar.price, bar.timestamp)
+        # Save updated EMAs back to context state
+        emas[bar.ticker] = current_ema
+        context.set('emas', emas)
         
-        # Example 4: Risk Management
-        positions = context.get_positions()
-        if bar.ticker in positions:
-             pos = positions[bar.ticker]
-             # Check for 5% profit
-             if bar.price > pos.entry_price * 1.05:
-                  context.sell(bar.ticker, pos.share_units, bar.price, bar.timestamp, "SELL")
+        # 2. CUSTOM METRIC (Visualized in Ticker Chart)
+        # context.set_metric(name, timestamp, ticker, value)
+        # This will automatically show up as a "Local Overlay" in the chart legend.
+        context.set_metric("EMA_Example", bar.timestamp, bar.ticker, current_ema)
+        
+        # 3. TRADING LOGIC
+        # Buy if price is more than 5% below EMA
+        if bar.price < current_ema * 0.95:
+             # Invest 20% of current balance
+             invest_amount = context.get_balance() * 0.20
+             context.buy(bar.ticker, invest_amount, bar.price, bar.timestamp)
+             
+        # Sell/Exit if price is more than 5% above EMA
+        elif bar.price > current_ema * 1.05:
+             # Close entire position for this ticker
+             context.close(bar.ticker, bar.price, bar.timestamp, "MeanRev_Exit")

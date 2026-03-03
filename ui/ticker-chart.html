@@ -10,37 +10,40 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #1d2021;
-            color: #ebdbb2;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #1a1b1c;
+            color: #d1d4dc;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             height: 100vh;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
 
         #header {
-            padding: 1rem;
-            background: #282828;
-            border-bottom: 1px solid #504945;
+            padding: 0.75rem 1.5rem;
+            background: #1e222d;
+            border-bottom: 1px solid #2a2e39;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            z-index: 10;
         }
 
         #chart-container {
             flex-grow: 1;
             width: 100%;
+            position: relative;
         }
 
         .ticker-name {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #fe8019;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #d1d4dc;
         }
 
         .stats {
-            font-size: 0.8rem;
-            color: #a89984;
+            font-size: 0.7rem;
+            color: #787b86;
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
@@ -50,19 +53,23 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 1.2rem;
-            color: #fabd2f;
+            font-size: 1rem;
+            color: #2962ff;
+            background: rgba(30, 34, 45, 0.8);
+            padding: 1rem 2rem;
+            border-radius: 4px;
+            z-index: 100;
         }
 
         #metrics-panel {
-            background: #282828;
-            border-bottom: 1px solid #504945;
-            padding: 0.5rem 1rem;
+            background: #1e222d;
+            border-bottom: 1px solid #2a2e39;
+            padding: 0.4rem 1.5rem;
             display: flex;
             flex-wrap: wrap;
             gap: 1rem;
             align-items: center;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
         }
 
         .metric-toggle {
@@ -70,17 +77,59 @@
             align-items: center;
             gap: 0.3rem;
             cursor: pointer;
-            padding: 2px 6px;
+            padding: 2px 8px;
             border-radius: 4px;
-            transition: background 0.2s;
+            background: #2a2e39;
+            transition: all 0.2s;
+            border: 1px solid transparent;
         }
 
         .metric-toggle:hover {
-            background: #3c3836;
+            background: #363a45;
         }
 
         .metric-toggle input {
             cursor: pointer;
+        }
+
+        /* Legend Style */
+        .chart-legend {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 5;
+            pointer-events: none;
+            font-size: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            background: rgba(26, 27, 28, 0.6);
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        .legend-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .legend-label {
+            color: #787b86;
+        }
+
+        .legend-value {
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .positive {
+            color: #089981;
+        }
+
+        .negative {
+            color: #f23645;
         }
     </style>
 </head>
@@ -89,29 +138,61 @@
     <div id="header">
         <div>
             <span class="ticker-name" id="ticker-display">---</span>
-            <span class="stats" style="margin-left: 1rem;">Daily Candlestick Chart</span>
+            <span class="stats" style="margin-left: 1rem;">Backtest Pro Terminal</span>
         </div>
         <div id="activity-stats" class="stats">
-            Fetching Activity...
+            Initializing Engine...
         </div>
     </div>
 
-    <div id="loading">Initializing Chart Data...</div>
+    <div id="loading">Initializing High-Fidelity Chart...</div>
+
     <div id="metrics-panel" style="display: none;">
-        <span class="stats" style="margin-right: 0.5rem; color: #fe8019;">Custom Metrics:</span>
+        <span class="stats" style="margin-right: 0.5rem; color: #2962ff;">Local Overlays:</span>
         <div id="metrics-list" style="display: flex; flex-wrap: wrap; gap: 0.8rem;"></div>
     </div>
-    <div id="chart-container"></div>
+
+    <div id="chart-container">
+        <div class="chart-legend" id="chart-legend">
+            <div class="legend-row">
+                <span class="legend-value" id="legend-ticker" style="color: #d1d4dc; font-size: 14px;">---</span>
+                <span class="legend-label">O</span><span class="legend-value" id="legend-open">-</span>
+                <span class="legend-label">H</span><span class="legend-value" id="legend-high">-</span>
+                <span class="legend-label">L</span><span class="legend-value" id="legend-low">-</span>
+                <span class="legend-label">C</span><span class="legend-value" id="legend-close">-</span>
+                <span class="legend-value" id="legend-change">-</span>
+            </div>
+            <div class="legend-row" id="legend-indicators">
+                <span class="legend-label">VOL</span><span class="legend-value" id="legend-vol">-</span>
+            </div>
+        </div>
+    </div>
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
-        const ticker = urlParams.get('ticker');
+        const ticker = urlParams.get('ticker') || 'Unknown';
 
-        if (!ticker) {
-            document.body.innerHTML = "<h1>No Ticker Specified</h1>";
-        } else {
-            document.getElementById('ticker-display').innerText = ticker;
-            initChart();
+        // Consistent time parsing to UTC Unix seconds
+        function parseTime(t) {
+            if (typeof t === 'number') {
+                // If larger than year 3000 in seconds, assume milliseconds
+                return t > 32503680000 ? Math.floor(t / 1000) : t;
+            }
+            if (typeof t === 'string') {
+                // If it's a Unix timestamp as a string
+                if (/^\d+$/.test(t)) {
+                    let val = parseInt(t);
+                    return val > 32503680000 ? Math.floor(val / 1000) : val;
+                }
+                // Append Z if missing to force UTC parsing, but avoid duplicate Z
+                let iso = t.trim();
+                if (!iso.includes('Z') && !iso.includes('+') && iso.length >= 10) {
+                    iso = iso.replace(' ', 'T') + 'Z';
+                }
+                let dt = new Date(iso);
+                return Math.floor(dt.getTime() / 1000);
+            }
+            return Math.floor(new Date(t).getTime() / 1000);
         }
 
         async function initChart() {
@@ -119,7 +200,6 @@
                 const container = document.getElementById('chart-container');
                 const loading = document.getElementById('loading');
 
-                // 1. Fetch OHLC and Trade Logs concurrently
                 const [ohlcResponse, logResponse] = await Promise.all([
                     fetch(`/ticker/${ticker}/ohlc`),
                     fetch(`/backtest/last-log`)
@@ -129,13 +209,15 @@
                 const logData = await logResponse.json();
 
                 if (ohlcData.length === 0) {
-                    loading.innerText = "No historical data found for this ticker.";
+                    loading.innerText = `No data found for ${ticker}`;
                     return;
                 }
 
                 loading.style.display = 'none';
+                document.getElementById('ticker-display').innerText = ticker;
+                document.getElementById('legend-ticker').innerText = ticker;
 
-                // 2. Create Chart instance
+                // 1. Create Chart
                 const chart = LightweightCharts.createChart(container, {
                     layout: {
                         background: { color: '#1d2021' },
@@ -148,132 +230,222 @@
                     crosshair: {
                         mode: LightweightCharts.CrosshairMode.Normal,
                     },
+                    rightPriceScale: {
+                        borderColor: '#504945',
+                        visible: true,
+                        autoScale: true,
+                    },
+                    leftPriceScale: {
+                        borderColor: '#504945',
+                        visible: true, // Enable left scale for indicators
+                    },
                     timeScale: {
                         borderColor: '#504945',
                         timeVisible: true,
+                        secondsVisible: false,
                     },
                 });
 
+                // 2. Add Series
                 const candlestickSeries = chart.addCandlestickSeries({
-                    upColor: '#b8bb26',
-                    downColor: '#fb4934',
+                    upColor: '#089981',
+                    downColor: '#f23645',
                     borderVisible: false,
-                    wickUpColor: '#b8bb26',
-                    wickDownColor: '#fb4934',
+                    wickUpColor: '#089981',
+                    wickDownColor: '#f23645',
                 });
 
-                candlestickSeries.setData(ohlcData);
+                const volumeSeries = chart.addHistogramSeries({
+                    color: '#26a69a',
+                    priceFormat: { type: 'volume' },
+                    priceScaleId: '', // overlay
+                });
 
-                // 3. Process Trade Markers
+                volumeSeries.priceScale().applyOptions({
+                    scaleMargins: { top: 0.8, bottom: 0 },
+                });
+
+                // 3. Prepare Data
+                const formattedOhlc = ohlcData.map(d => ({
+                    time: parseTime(d.time || d.timestamp || d.Time),
+                    open: parseFloat(d.open),
+                    high: parseFloat(d.high),
+                    low: parseFloat(d.low),
+                    close: parseFloat(d.close)
+                })).sort((a, b) => a.time - b.time);
+
+                const volumeData = ohlcData.map(d => ({
+                    time: parseTime(d.time || d.timestamp || d.Time),
+                    value: parseFloat(d.volume || 0),
+                    color: parseFloat(d.close) >= parseFloat(d.open) ? 'rgba(8, 153, 129, 0.5)' : 'rgba(242, 54, 69, 0.5)'
+                })).sort((a, b) => a.time - b.time);
+
+                candlestickSeries.setData(formattedOhlc);
+                volumeSeries.setData(volumeData);
+
+                // 4. Trade Markers
                 const tickerLogs = logData.event_log.filter(l => l.ticker === ticker);
                 const markers = tickerLogs.map(log => {
-                    const type = log.event_type;
-                    const isBuy = type === 'BUY';
-                    const isSell = type.startsWith('SELL');
-
+                    const isBuy = log.event_type === 'BUY';
+                    const isSell = log.event_type.startsWith('SELL');
                     if (!isBuy && !isSell) return null;
 
                     return {
-                        time: Math.floor(new Date(log.timestamp).getTime() / 1000),
+                        time: parseTime(log.timestamp),
                         position: isBuy ? 'belowBar' : 'aboveBar',
-                        color: isBuy ? '#b8bb26' : '#fb4934',
+                        color: isBuy ? '#089981' : '#f23645',
                         shape: isBuy ? 'arrowUp' : 'arrowDown',
-                        text: `${type} @ ${parseFloat(log.price).toFixed(2)}`,
-                        size: 2
+                        text: `${log.event_type} @ ${parseFloat(log.price).toFixed(2)}`,
+                        size: 1.5
                     };
-                }).filter(m => m !== null);
+                }).filter(m => m !== null).sort((a, b) => a.time - b.time);
 
                 candlestickSeries.setMarkers(markers);
+                document.getElementById('activity-stats').innerText = `${tickerLogs.length} Backtest Events`;
 
-                document.getElementById('activity-stats').innerText = `${tickerLogs.length} Activities Found`;
+                // 5. Legend Update Logic
+                const metricSeriesMap = new Map();
 
-                // Handle Resizing
-                window.addEventListener('resize', () => {
-                    chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
-                });
+                const updateLegend = (param) => {
+                    const data = param.seriesData.get(candlestickSeries);
+                    const volData = param.seriesData.get(volumeSeries);
 
-                chart.timeScale().fitContent();
+                    if (data) {
+                        const change = data.close - data.open;
+                        const changePct = (change / data.open) * 100;
+                        document.getElementById('legend-open').innerText = data.open.toFixed(2);
+                        document.getElementById('legend-high').innerText = data.high.toFixed(2);
+                        document.getElementById('legend-low').innerText = data.low.toFixed(2);
+                        document.getElementById('legend-close').innerText = data.close.toFixed(2);
 
-                // 4. Handle Custom Metrics
+                        const changeEl = document.getElementById('legend-change');
+                        changeEl.innerText = `${change >= 0 ? '+' : ''}${change.toFixed(2)} (${changePct.toFixed(2)}%)`;
+                        changeEl.className = `legend-value ${change >= 0 ? 'positive' : 'negative'}`;
+                    }
+
+                    if (volData) {
+                        document.getElementById('legend-vol').innerText = (volData.value / 1000).toFixed(1) + 'K';
+                    }
+
+                    // Dynamic Metrics in Legend
+                    metricSeriesMap.forEach((series, name) => {
+                        const val = param.seriesData.get(series);
+                        const el = document.getElementById(`legend-metric-${name}`);
+                        if (el) {
+                            el.innerText = val ? val.value.toFixed(2) : '-';
+                        }
+                    });
+                };
+
+                chart.subscribeCrosshairMove(updateLegend);
+
+                // Initialize legend with last data point
+                const lastPoint = formattedOhlc[formattedOhlc.length - 1];
+                if (lastPoint) {
+                    document.getElementById('legend-open').innerText = lastPoint.open.toFixed(2);
+                    document.getElementById('legend-high').innerText = lastPoint.high.toFixed(2);
+                    document.getElementById('legend-low').innerText = lastPoint.low.toFixed(2);
+                    document.getElementById('legend-close').innerText = lastPoint.close.toFixed(2);
+                }
+
+                // 6. Handle Custom Metrics
                 const customMetrics = logData.custom_metrics[ticker] || {};
                 const metricNames = Object.keys(customMetrics);
-                
+
                 if (metricNames.length > 0) {
                     const metricsPanel = document.getElementById('metrics-panel');
                     const metricsList = document.getElementById('metrics-list');
+                    const indicatorsLegend = document.getElementById('legend-indicators');
                     metricsPanel.style.display = 'flex';
-                    
-                    const metricSeriesMap = new Map();
-                    const colors = [
-                        '#fabd2f', '#83a598', '#d3869b', '#8ec07c', '#fe8019',
-                        '#fb4934', '#b8bb26', '#458588', '#b16286', '#689d6a'
-                    ];
+
+                    const colors = ['#2962ff', '#9c27b0', '#ff9800', '#4caf50', '#f44336'];
 
                     metricNames.forEach((name, index) => {
                         const color = colors[index % colors.length];
                         const label = document.createElement('label');
                         label.className = 'metric-toggle';
                         label.style.color = color;
-                        
+
                         const checkbox = document.createElement('input');
                         checkbox.type = 'checkbox';
                         checkbox.onchange = (e) => {
                             if (e.target.checked) {
-                                // Add series if not exists
-                                const series = chart.addLineSeries({
-                                    color: color,
-                                    lineWidth: 2,
-                                    title: name,
-                                    priceScaleId: 'left', // Use left axis for metrics to avoid scaling issues
-                                });
-                                
-                                // Process data
-                                const data = customMetrics[name].map(item => ({
-                                    time: Math.floor(new Date(item.timestamp).getTime() / 1000),
+                                const mData = customMetrics[name].map(item => ({
+                                    time: parseTime(item.timestamp),
                                     value: parseFloat(item.value)
                                 })).sort((a, b) => a.time - b.time);
 
-                                // Lightweight charts doesn't like duplicate timestamps
+                                // Smart Scaling Detection
+                                // Price action range
+                                const prices = formattedOhlc.map(d => d.close);
+                                const minPrice = Math.min(...prices);
+                                const maxPrice = Math.max(...prices);
+
+                                // Metric range
+                                const metricValues = mData.map(d => d.value);
+                                const minMetric = Math.min(...metricValues);
+                                const maxMetric = Math.max(...metricValues);
+
+                                // If the ranges overlap significantly or metric is within price vicinity
+                                const overlap = (minMetric <= maxPrice && maxMetric >= minPrice);
+                                const usePrimaryScale = overlap || (maxMetric < maxPrice * 2 && minMetric > minPrice * 0.5);
+
+                                const series = chart.addLineSeries({
+                                    color: color,
+                                    lineWidth: 2,
+                                    priceScaleId: usePrimaryScale ? 'right' : 'left',
+                                });
+
+                                // Remove duplicate timestamps
                                 const uniqueData = [];
-                                data.forEach(d => {
+                                mData.forEach(d => {
                                     if (uniqueData.length === 0 || uniqueData[uniqueData.length - 1].time !== d.time) {
                                         uniqueData.push(d);
-                                    } else {
-                                        uniqueData[uniqueData.length - 1].value = d.value; // Keep latest
                                     }
                                 });
 
                                 series.setData(uniqueData);
                                 metricSeriesMap.set(name, series);
+
+                                // Add to legend
+                                const legendItem = document.createElement('span');
+                                legendItem.id = `legend-container-${name}`;
+                                legendItem.innerHTML = `<span class="legend-label" style="margin-left: 8px;">${name}</span><span class="legend-value" id="legend-metric-${name}" style="color: ${color}">-</span>`;
+                                indicatorsLegend.appendChild(legendItem);
+
                             } else {
-                                // Remove series
                                 const series = metricSeriesMap.get(name);
                                 if (series) {
                                     chart.removeSeries(series);
                                     metricSeriesMap.delete(name);
                                 }
+                                const legendItem = document.getElementById(`legend-container-${name}`);
+                                if (legendItem) legendItem.remove();
                             }
                         };
-                        
+
                         label.appendChild(checkbox);
                         label.appendChild(document.createTextNode(name));
                         metricsList.appendChild(label);
                     });
 
-                    // Configure left axis if metrics used
                     chart.applyOptions({
-                        leftPriceScale: {
-                            visible: true,
-                            borderColor: '#504945',
-                        },
+                        leftPriceScale: { visible: true, borderColor: '#2a2e39' },
                     });
                 }
 
+                chart.timeScale().fitContent();
+                window.addEventListener('resize', () => {
+                    chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
+                });
+
             } catch (err) {
                 console.error(err);
-                document.getElementById('loading').innerText = "Failed to load chart data.";
+                document.getElementById('loading').innerText = "Terminal Error: " + err.message;
             }
         }
+
+        initChart();
     </script>
 </body>
 

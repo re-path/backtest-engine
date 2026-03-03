@@ -250,7 +250,12 @@ const App = () => {
 
                 setStrategyName(strat.name);
                 setCode(strat.code);
-                setParams(strat.params);
+                // Merge params instead of overwriting to keep essential backtest settings
+                setParams(prev => ({
+                    ...prev,
+                    ...(strat.params || {}),
+                    strategy_params: { ...(prev.strategy_params || {}), ...(strat.params?.strategy_params || {}) }
+                }));
                 if (cmInstance.current) cmInstance.current.setValue(strat.code);
             } catch (e) {
                 alert(e.message);
@@ -314,7 +319,9 @@ const App = () => {
         const { name, value } = e.target;
         setParams(prev => ({
             ...prev,
-            [name]: ['initial_balance', 'slippage', 'broker_fee', 'annual_interest_rate'].includes(name) ? parseFloat(value) : value
+            [name]: ['initial_balance', 'slippage', 'broker_fee', 'annual_interest_rate'].includes(name)
+                ? (value === '' ? 0 : parseFloat(value))
+                : value
         }));
     };
 

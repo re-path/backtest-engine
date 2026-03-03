@@ -60,7 +60,7 @@ class Context:
         self.pending_orders: List[Dict[str, Any]] = [] 
         self.custom_metrics: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
 
-    def set_metric(self, ticker: str, timestamp: Any, metric_name: str, metric_value: Any) -> None:
+    def set_metric(self, metric_name: str, timestamp: Any, ticker: str, metric_value: Any) -> None:
         if ticker not in self.custom_metrics:
             self.custom_metrics[ticker] = {}
         

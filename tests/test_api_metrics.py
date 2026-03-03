@@ -17,7 +17,7 @@ class TestAPIMetrics(unittest.TestCase):
         strategy_code = """
 class Strategy:
     def on_bar(self, context, bar):
-        context.set_metric(bar.ticker, bar.timestamp, 'custom_val', bar.price * 2)
+        context.set_metric('custom_val', bar.timestamp, bar.ticker, bar.price * 2)
 """
         # We need a small amount of data. This test might be slow if it queries real DB.
         # However, we can check if the response format is correct.
