@@ -145,6 +145,28 @@ def _(mo, query, stock):
 
 
 @app.cell
+def _(query):
+    query("""
+    WITH d1 AS (
+
+    SELECT *,
+        lag(trade_time, 1) OVER (PARTITION BY symbol ORDER BY trade_time) AS lag_trade_time,
+        lag(buyer_broker, 1) OVER (PARTITION BY symbol ORDER BY trade_time) AS lag_buyer_broker
+        FROM raw.floorsheet
+    WHERE symbol = 'NFS'
+    
+    )
+
+    SELECT * FROM d1 WHERE trade_time - lag_trade_time <= INTERVAL 100 MICROSECOND
+    AND buyer_broker = lag_buyer_broker
+
+    LIMIT 1000
+
+    """)
+    return
+
+
+@app.cell
 def _():
     return
 

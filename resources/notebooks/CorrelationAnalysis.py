@@ -327,42 +327,42 @@ def _(cor_matrix, findMaxEval, fitKDE, getPCA, go, mpPDF, returns_wide):
         N = returns_wide.shape[1]
         q = T / N
         print("T is ", T, " : N is ", N)
-    
+
         eigenvalues, _ = getPCA(cor_matrix)
-    
+
         bandwidth = 0.01
         eMax, var = findMaxEval(eigenvalues, q, bandwidth)
-    
+
         mp_pdf = mpPDF(var, q, 1000)
         kde_pdf = fitKDE(eigenvalues, bandwidth=bandwidth, x=mp_pdf.index.values)
         # Check the top 5 eigenvalues
         print("Top 5 Eigenvalues:", eigenvalues[:5])
         print("Signal Threshold (eMax):", eMax)
-    
+
         fig = go.Figure()
-    
+
         fig.add_trace(go.Scatter(
             x=mp_pdf.index,
             y=mp_pdf.values,
             mode='lines',
             name='Marcenko-Pastur PDF'
         ))
-    
+
         fig.add_trace(go.Scatter(
             x=kde_pdf.index,
             y=kde_pdf.values,
             mode='lines',
             name='Empirical KDE'
         ))
-    
+
         fig.add_vline(x=eMax)
-    
+
         fig.update_layout(
             title='Marcenko-Pastur Fit vs Empirical Eigenvalue Distribution',
             xaxis_title='Eigenvalue',
             yaxis_title='Density'
         )
-    
+
         fig.show()
 
     compare_marcenko(cor_matrix)
@@ -426,29 +426,29 @@ def _(cor_matrix, cov2corr, findMaxEval, fitKDE, getPCA, go, np, returns_wide):
     def plot_before_and_after(raw_corr, clean_corr):
         evals_raw, _ = getPCA(raw_corr)
         evals_clean, _ = getPCA(clean_corr)
-    
+
         kde_raw = fitKDE(evals_raw, bandwidth=0.01)
         kde_clean = fitKDE(evals_clean, bandwidth=0.01)
-    
+
         fig = go.Figure()
-    
+
         fig.add_trace(go.Scatter(
             x=kde_raw.index, y=kde_raw.values,
             mode='lines', name='Before'
         ))
-    
+
         fig.add_trace(go.Scatter(
             x=kde_clean.index, y=kde_clean.values,
             mode='lines', name='After'
         ))
-    
+
         fig.update_layout(
             title='Eigenvalue Distribution: Before vs After',
             xaxis_title='Eigenvalue',
             yaxis_title='Density',
             xaxis_range=[0, 5] 
         )
-    
+
         fig.show()
 
     def detonedCorr(denoised_corr, n_facts=1):
@@ -458,7 +458,7 @@ def _(cor_matrix, cov2corr, findMaxEval, fitKDE, getPCA, go, np, returns_wide):
         corr_detoned_raw = evecs @ np.diag(evals_detoned) @ evecs.T
         corr_detoned = cov2corr(corr_detoned_raw)
         return corr_detoned
-    
+
     def _func_fixed():
         T = returns_wide.shape[0]
         N = returns_wide.shape[1]
@@ -479,7 +479,7 @@ def _(cor_matrix, cov2corr, findMaxEval, fitKDE, getPCA, go, np, returns_wide):
 
 
 @app.cell
-def _(denoised_corr_matrix, minimize, np, pl, returns_wide):
+def _(denoised_corr_matrix, minimize, mo, np, pl, returns_wide):
     # returns_wide = daily_returns.pivot(
     #     values="daily_returns",
     #     index="timestamp",
@@ -504,29 +504,66 @@ def _(denoised_corr_matrix, minimize, np, pl, returns_wide):
         bounds = [(0, 1) for _ in range(N)]
         w0 = np.ones(N) / N
         result = minimize(portfolio_var, w0, method='SLSQP', bounds=bounds, constraints=constraints)
-    
+
         if not result.success:
             return np.ones(N) / N
-    
+
         return result.x
 
-    def _func():
-        tickers = [col for col in returns_wide.columns if col != "timestamp"]
-        data_matrix = returns_wide.drop("timestamp").select(tickers).fill_null(0).fill_nan(0).to_numpy()
-    
-        T, N = data_matrix.shape
-        q = T / N
-        print("q is ", q)
-    
-        std_dev = data_matrix.std(axis=0)
-        cov_matrix = corr_to_cov(denoised_corr_matrix, std_dev)
-    
-        weights = optPort(cov_matrix)
-    
-        return pl.DataFrame([dict(zip(tickers, weights))]).unpivot(value_name='weight', variable_name='ticker').sort('weight', descending=True)
+    def optPortSharpe(cov, mu, rf=0.0):
+        """
+        Compute Maximum Sharpe Ratio portfolio weights.
+        Returns weights that are non-negative and sum to 1.
+        """
 
-    _func()
+        N = cov.shape[0]
+        cov_safe = cov + np.eye(N) * 1e-8
 
+        def neg_sharpe(w):
+            port_return = w @ mu
+            port_vol = np.sqrt(w.T @ cov_safe @ w)
+            if port_vol == 0:
+                return 1e6
+            return -(port_return - rf) / port_vol
+
+        constraints = ({'type': 'eq', 'fun': lambda w: np.sum(w) - 1})
+        bounds = [(0, 1) for _ in range(N)]
+        w0 = np.ones(N) / N
+
+        result = minimize(
+            neg_sharpe,
+            w0,
+            method='SLSQP',
+            bounds=bounds,
+            constraints=constraints
+        )
+
+        if not result.success:
+            return np.ones(N) / N
+
+        return result.x
+
+    tickers = [col for col in returns_wide.columns if col != "timestamp"]
+    data_matrix = returns_wide.drop("timestamp").select(tickers).fill_null(0).fill_nan(0).to_numpy()
+    mu = data_matrix.mean(axis=0)
+    T, N = data_matrix.shape
+    q = T / N
+    print("q is ", q)
+
+    std_dev = data_matrix.std(axis=0)
+    _cov_matrix = corr_to_cov(denoised_corr_matrix, std_dev)
+
+    weights = optPort(_cov_matrix)
+
+    mo.output.append(
+        pl.DataFrame([dict(zip(tickers, weights))]).unpivot(value_name='weight', variable_name='ticker').sort('weight', descending=True)
+    )
+
+    weights2 = optPortSharpe(_cov_matrix, mu, 0.0)
+
+    mo.output.append(
+        pl.DataFrame([dict(zip(tickers, weights2))]).unpivot(value_name='weight', variable_name='ticker').sort('weight', descending=True)
+    )
     return
 
 
